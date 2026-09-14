@@ -1,6 +1,8 @@
 export const COURSE_LIST_URL =
   "https://mooc1-1.chaoxing.com/mooc-ans/visit/courselistdata";
 
+export const INBOX_URL = "https://notice.chaoxing.com/pc/notice/myNotice";
+
 export type CourseRef = {
   courseId: string;
   classId: string;
