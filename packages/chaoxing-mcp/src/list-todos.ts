@@ -87,6 +87,10 @@ function unscannedResult(
   };
 }
 
+function isSuccessfulHttp(statusCode: number): boolean {
+  return statusCode >= 200 && statusCode < 300;
+}
+
 function resolveScope(scope: string | undefined): TodoScope | null {
   if (scope === undefined) {
     return "current_semester";
@@ -132,10 +136,23 @@ export async function listTodos(
     return openLoginAndExpire(ports, resolved);
   }
 
-  const coursesResponse = await ports.http.request({
-    url: COURSE_LIST_URL,
-    cookie,
-  });
+  let coursesResponse: Awaited<ReturnType<ChaoxingHttp["request"]>> | undefined;
+  try {
+    coursesResponse = await ports.http.request({
+      url: COURSE_LIST_URL,
+      cookie,
+    });
+  } catch {
+    coursesResponse = undefined;
+  }
+  if (
+    coursesResponse === undefined ||
+    !isSuccessfulHttp(coursesResponse.statusCode)
+  ) {
+    return unscannedResult("incomplete", resolved, [
+      { where: "courses", message: "在读课程列表拉取失败" },
+    ]);
+  }
   const courses = parseEnrolledCourses(coursesResponse.body);
   const currentSemester = currentSemesterOf(courses);
   if (resolved === "current_semester" && currentSemester === null) {
@@ -152,9 +169,24 @@ export async function listTodos(
         );
 
   const todos: TodoItem[] = [];
+  const errors: ListTodosError[] = [];
+  let courseSpaceSuccesses = 0;
   for (const course of inScope) {
     const listUrl = courseWorkListUrl(course);
-    const space = await ports.http.request({ url: listUrl, cookie });
+    let space: Awaited<ReturnType<ChaoxingHttp["request"]>> | undefined;
+    try {
+      space = await ports.http.request({ url: listUrl, cookie });
+    } catch {
+      space = undefined;
+    }
+    if (space === undefined || !isSuccessfulHttp(space.statusCode)) {
+      errors.push({
+        where: course.title,
+        message: "课程空间拉取失败",
+      });
+      continue;
+    }
+    courseSpaceSuccesses += 1;
     for (const task of parseCourseSpaceTodos(space.body, course)) {
       todos.push({
         id: task.id,
@@ -169,14 +201,18 @@ export async function listTodos(
     }
   }
 
+  const incomplete = errors.length > 0;
   return {
-    isError: false,
-    status: "ok",
+    isError: incomplete && todos.length === 0,
+    status: incomplete ? "incomplete" : "ok",
     scope: resolved,
     current_semester: currentSemester,
-    sources_scanned: { course_space: true, inbox: false },
+    sources_scanned: {
+      course_space: !incomplete || courseSpaceSuccesses > 0,
+      inbox: false,
+    },
     todos,
     unmatched_assignment_notices: 0,
-    errors: [],
+    errors,
   };
 }

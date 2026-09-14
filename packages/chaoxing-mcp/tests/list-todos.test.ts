@@ -566,3 +566,174 @@ describe("listTodos fixture semester scope", () => {
     assert.equal(redo?.source, "course_space");
   });
 });
+
+describe("listTodos course fetch failures", () => {
+  test("returns an error when enrolled course list fetch fails, not ok with empty 待办事项", async () => {
+    const fake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: {
+        [AUTH_PROBE_URL]: AUTH_OK,
+      },
+    });
+
+    const result = await listTodos("current_semester", fake.ports);
+
+    assert.equal(result.isError, true);
+    assert.notEqual(result.status, "ok");
+    assert.deepEqual(result.todos, []);
+    assert.equal(result.errors.length > 0, true);
+    assert.equal(result.sources_scanned.course_space, false);
+    assert.equal(fake.openLoginCallCount(), 0);
+  });
+
+  test("returns an error when enrolled course list HTTP status is not successful, not ok with empty 待办事项", async () => {
+    const fake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: {
+        [AUTH_PROBE_URL]: AUTH_OK,
+        [COURSE_LIST_URL]: {
+          statusCode: 500,
+          url: COURSE_LIST_URL,
+          body: "internal error",
+        },
+      },
+    });
+
+    const result = await listTodos("all", fake.ports);
+
+    assert.equal(result.isError, true);
+    assert.notEqual(result.status, "ok");
+    assert.deepEqual(result.todos, []);
+    assert.equal(result.errors.length > 0, true);
+    assert.equal(result.sources_scanned.course_space, false);
+  });
+
+  test("returns incomplete with remaining 待办事项 when one course space fails", async () => {
+    const responses = fixtureAResponses();
+    const failedCourse = {
+      courseId: "102",
+      classId: "202",
+      cpi: "1",
+      title: "261-新课",
+    };
+    delete responses[workListUrl(failedCourse.courseId, failedCourse.classId, failedCourse.cpi)];
+    const fake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: responses,
+    });
+
+    const result = await listTodos("all", fake.ports);
+
+    assert.equal(result.status, "incomplete");
+    assert.notEqual(result.status, "ok");
+    assert.equal(result.isError, false);
+    assert.equal(result.scope, "all");
+    assert.equal(result.current_semester, "261");
+    assert.deepEqual(
+      result.todos.map((todo) => todo.title),
+      ["旧课作业", "选修作业"],
+    );
+    assert.equal(
+      result.errors.some((error) => error.where.includes("261-新课")),
+      true,
+    );
+    assert.equal(result.sources_scanned.course_space, true);
+    assert.equal(result.sources_scanned.inbox, false);
+    assert.equal(JSON.stringify(result).includes(VALID_COOKIE), false);
+  });
+
+  test("returns incomplete when one course space HTTP status is not successful", async () => {
+    const responses = fixtureAResponses();
+    const failedUrl = workListUrl("101", "201", "1");
+    responses[failedUrl] = {
+      statusCode: 502,
+      url: failedUrl,
+      body: "bad gateway",
+    };
+    const fake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: responses,
+    });
+
+    const result = await listTodos("all", fake.ports);
+
+    assert.equal(result.status, "incomplete");
+    assert.equal(result.isError, false);
+    assert.equal(
+      result.todos.some((todo) => todo.course_title === "253-旧课"),
+      false,
+    );
+    assert.equal(
+      result.todos.some((todo) => todo.title === "新课作业"),
+      true,
+    );
+    assert.equal(
+      result.errors.some((error) => error.where.includes("253-旧课")),
+      true,
+    );
+  });
+
+  test("does not return ok with empty 待办事项 when every course space fails", async () => {
+    const responses = fixtureAResponses();
+    delete responses[workListUrl("101", "201", "1")];
+    delete responses[workListUrl("102", "202", "1")];
+    delete responses[workListUrl("103", "203", "1")];
+    const fake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: responses,
+    });
+
+    const result = await listTodos("all", fake.ports);
+
+    assert.notEqual(result.status, "ok");
+    assert.equal(result.status, "incomplete");
+    assert.equal(result.isError, true);
+    assert.deepEqual(result.todos, []);
+    assert.equal(result.errors.length, 3);
+    assert.equal(
+      result.errors.some((error) => error.where.includes("253-旧课")),
+      true,
+    );
+    assert.equal(
+      result.errors.some((error) => error.where.includes("261-新课")),
+      true,
+    );
+    assert.equal(
+      result.errors.some((error) => error.where.includes("选修无学期")),
+      true,
+    );
+    assert.equal(result.sources_scanned.course_space, false);
+  });
+
+  test("returns an error incomplete when a course space succeeds with no still-open 待办事项 and others fail", async () => {
+    const responses = fixtureAResponses();
+    responses[workListUrl("102", "202", "1")] = okHtml(
+      workListUrl("102", "202", "1"),
+      courseSpaceHtml([
+        {
+          id: "2613",
+          title: "新课已交",
+          status: "已提交",
+          due: "2026-09-18 23:59",
+          courseId: "102",
+          classId: "202",
+        },
+      ]),
+    );
+    delete responses[workListUrl("101", "201", "1")];
+    delete responses[workListUrl("103", "203", "1")];
+    const fake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: responses,
+    });
+
+    const result = await listTodos("all", fake.ports);
+
+    assert.equal(result.status, "incomplete");
+    assert.notEqual(result.status, "ok");
+    assert.equal(result.isError, true);
+    assert.deepEqual(result.todos, []);
+    assert.equal(result.errors.length, 2);
+    assert.equal(result.sources_scanned.course_space, true);
+  });
+});
