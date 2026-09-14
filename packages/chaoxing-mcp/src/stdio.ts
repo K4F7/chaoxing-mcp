@@ -1,23 +1,17 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
+import { createKeychainCredentialStore } from "./credentials";
+import { createFetchChaoxingHttp } from "./http";
 import type { ListTodosPorts } from "./list-todos";
+import { createPassportOpenLogin } from "./open-login";
 import { createChaoxingMcpServer } from "./server";
 
 function localStdioPorts(): ListTodosPorts {
+  const credentials = createKeychainCredentialStore();
   return {
-    credentials: {
-      async getCookie() {
-        return null;
-      },
-    },
-    http: {
-      async request() {
-        throw new Error("Chaoxing HTTP is not implemented");
-      },
-    },
-    openLogin: {
-      async openLogin() {},
-    },
+    credentials,
+    http: createFetchChaoxingHttp(),
+    openLogin: createPassportOpenLogin(credentials),
   };
 }
 
