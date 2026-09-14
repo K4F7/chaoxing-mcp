@@ -9,9 +9,20 @@ export type ParsedCourseTodo = {
   id: string;
   title: string;
   due_at: string | null;
+  closed: boolean;
+};
+
+export type ParsedInboxNotice = {
+  id: string;
+  title: string;
+  due_at: string | null;
+  courseId: string | null;
+  classId: string | null;
+  assignmentLike: boolean;
 };
 
 const CLOSED_STATUS = /已提交|已完成|已结束|不可作答/;
+const ASSIGNMENT_LIKE = /作业|考试|测验|测试|截止|答题|试卷|练习/;
 
 export function semesterCodeOf(title: string): string | null {
   const match = title.trim().match(/^(\d{3})/);
@@ -71,9 +82,6 @@ export function parseCourseSpaceTodos(
       continue;
     }
     const text = stripTags(inner);
-    if (CLOSED_STATUS.test(text)) {
-      continue;
-    }
     const title =
       decodeEntities(
         inner.match(/<p\b[^>]*>([^<]*)/i)?.[1]?.trim() ?? "",
@@ -89,9 +97,54 @@ export function parseCourseSpaceTodos(
         title,
       title,
       due_at: toDueAt(dueMatch?.[1] ?? null),
+      closed: CLOSED_STATUS.test(text),
     });
   }
   return todos;
+}
+
+export function parseInboxNotices(html: string): ParsedInboxNotice[] {
+  const notices: ParsedInboxNotice[] = [];
+  const itemPattern = /<li\b([^>]*)>([\s\S]*?)<\/li>/gi;
+  for (const match of html.matchAll(itemPattern)) {
+    const attrs = parseAttributes(match[1]);
+    const classNames = (attrs.class ?? "").split(/\s+/).filter(Boolean);
+    if (!classNames.includes("notice")) {
+      continue;
+    }
+    const inner = match[2];
+    const text = stripTags(inner);
+    const title =
+      decodeEntities(
+        inner.match(/<p\b[^>]*>([^<]*)/i)?.[1]?.trim() ?? "",
+      ) || text;
+    const dueMatch = text.match(
+      /截止时间[:：]\s*(\d{4}-\d{1,2}-\d{1,2}\s+\d{1,2}:\d{2})/,
+    );
+    const rawUrl = decodeEntities(attrs.data ?? attrs.href ?? "");
+    const courseId = readQueryParam(rawUrl, "courseId");
+    const classId = readQueryParam(rawUrl, "classId");
+    notices.push({
+      id:
+        readQueryParam(rawUrl, "taskrefId") ??
+        readQueryParam(rawUrl, "workId") ??
+        readQueryParam(rawUrl, "examId") ??
+        title,
+      title,
+      due_at: toDueAt(dueMatch?.[1] ?? null),
+      courseId,
+      classId,
+      assignmentLike: isAssignmentLike(text),
+    });
+  }
+  return notices;
+}
+
+function isAssignmentLike(text: string): boolean {
+  if (text.includes("结束提醒")) {
+    return false;
+  }
+  return ASSIGNMENT_LIKE.test(text);
 }
 
 function parseAttributes(raw: string): Record<string, string> {

@@ -1,9 +1,10 @@
-import { COURSE_LIST_URL, courseWorkListUrl } from "./chaoxing-urls";
+import { COURSE_LIST_URL, INBOX_URL, courseWorkListUrl } from "./chaoxing-urls";
 import { AUTH_PROBE_URL, looksLikeLoginPage } from "./login-page";
 import {
   currentSemesterOf,
   parseCourseSpaceTodos,
   parseEnrolledCourses,
+  parseInboxNotices,
   semesterCodeOf,
 } from "./parse";
 
@@ -170,6 +171,7 @@ export async function listTodos(
 
   const todos: TodoItem[] = [];
   const errors: ListTodosError[] = [];
+  const seenIds = new Set<string>();
   let courseSpaceSuccesses = 0;
   for (const course of inScope) {
     const listUrl = courseWorkListUrl(course);
@@ -188,6 +190,10 @@ export async function listTodos(
     }
     courseSpaceSuccesses += 1;
     for (const task of parseCourseSpaceTodos(space.body, course)) {
+      seenIds.add(`${course.courseId}:${task.id}`);
+      if (task.closed) {
+        continue;
+      }
       todos.push({
         id: task.id,
         title: task.title,
@@ -201,6 +207,49 @@ export async function listTodos(
     }
   }
 
+  let inboxScanned = false;
+  let unmatchedAssignmentNotices = 0;
+  let inboxResponse: Awaited<ReturnType<ChaoxingHttp["request"]>> | undefined;
+  try {
+    inboxResponse = await ports.http.request({ url: INBOX_URL, cookie });
+  } catch {
+    inboxResponse = undefined;
+  }
+  if (inboxResponse !== undefined && isSuccessfulHttp(inboxResponse.statusCode)) {
+    inboxScanned = true;
+    for (const notice of parseInboxNotices(inboxResponse.body)) {
+      if (!notice.assignmentLike) {
+        continue;
+      }
+      const course = inScope.find(
+        (candidate) =>
+          candidate.courseId === notice.courseId &&
+          (notice.classId == null || candidate.classId === notice.classId),
+      );
+      if (course === undefined) {
+        unmatchedAssignmentNotices += 1;
+        continue;
+      }
+      const identity = `${course.courseId}:${notice.id}`;
+      if (seenIds.has(identity)) {
+        continue;
+      }
+      seenIds.add(identity);
+      todos.push({
+        id: notice.id,
+        title: notice.title,
+        course_title: course.title,
+        semester_code: semesterCodeOf(course.title),
+        due_at: notice.due_at,
+        source: "inbox",
+        course_id: course.courseId,
+        class_id: course.classId,
+      });
+    }
+  } else {
+    errors.push({ where: "inbox", message: "收件箱拉取失败" });
+  }
+
   const incomplete = errors.length > 0;
   return {
     isError: incomplete && todos.length === 0,
@@ -208,11 +257,11 @@ export async function listTodos(
     scope: resolved,
     current_semester: currentSemester,
     sources_scanned: {
-      course_space: !incomplete || courseSpaceSuccesses > 0,
-      inbox: false,
+      course_space: courseSpaceSuccesses > 0,
+      inbox: inboxScanned,
     },
     todos,
-    unmatched_assignment_notices: 0,
+    unmatched_assignment_notices: unmatchedAssignmentNotices,
     errors,
   };
 }
