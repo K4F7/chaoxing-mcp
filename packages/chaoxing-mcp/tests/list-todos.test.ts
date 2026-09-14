@@ -1,13 +1,36 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
+import { COURSE_LIST_URL, courseWorkListUrl } from "../src/chaoxing-urls";
 import { listTodos, type ListTodosPorts } from "../src/index";
+import { AUTH_PROBE_URL } from "../src/login-page";
 
 type FakeStore = { cookie: string | null };
+type FakeHttpResponse = { statusCode: number; url: string; body: string };
+
+const VALID_COOKIE = "UID=1; vc3=abc";
+
+function workListUrl(
+  courseId: string,
+  classId: string,
+  cpi: string,
+): string {
+  return courseWorkListUrl({ courseId, classId, cpi });
+}
+
+function okHtml(url: string, body: string): FakeHttpResponse {
+  return { statusCode: 200, url, body };
+}
+
+const AUTH_OK = okHtml(
+  AUTH_PROBE_URL,
+  "<title>个人空间</title><div>收件箱</div>",
+);
 
 function createPorts(options: {
   cookie?: string | null;
-  httpResponse?: { statusCode: number; url: string; body: string };
+  httpResponse?: FakeHttpResponse;
+  httpByUrl?: Record<string, FakeHttpResponse>;
   onOpenLogin?: (store: FakeStore) => Promise<void>;
 } = {}): {
   ports: ListTodosPorts;
@@ -25,12 +48,18 @@ function createPorts(options: {
       },
     },
     http: {
-      async request() {
+      async request({ url }) {
         httpCallCount += 1;
+        const mapped = options.httpByUrl?.[url];
+        if (mapped !== undefined) {
+          return mapped;
+        }
         if (options.httpResponse) {
           return options.httpResponse;
         }
-        throw new Error("listTodos must not hit the network in this slice");
+        throw new Error(
+          `listTodos must not hit the network in this slice: ${url}`,
+        );
       },
     },
     openLogin: {
@@ -47,6 +76,229 @@ function createPorts(options: {
     store,
     openLoginCallCount: () => openLoginCallCount,
     httpCallCount: () => httpCallCount,
+  };
+}
+
+function enrolledCoursesHtml(
+  courses: ReadonlyArray<{
+    courseId: string;
+    classId: string;
+    cpi: string;
+    title: string;
+  }>,
+): string {
+  const items = courses
+    .map(
+      (course) => `
+        <li class="course" courseid="${course.courseId}" clazzid="${course.classId}" personid="${course.cpi}">
+          <h3 class="course-name">${course.title}</h3>
+        </li>`,
+    )
+    .join("");
+  return `<ul id="courseList">${items}</ul>`;
+}
+
+function courseSpaceHtml(
+  tasks: ReadonlyArray<{
+    id: string;
+    title: string;
+    status: string;
+    due: string;
+    courseId: string;
+    classId: string;
+  }>,
+): string {
+  const items = tasks
+    .map(
+      (task) => `
+        <li data="/mooc-ans/work/phone/task-work?taskrefId=${task.id}&amp;courseId=${task.courseId}&amp;classId=${task.classId}">
+          <p>${task.title}</p>
+          <span class="status">${task.status}</span>
+          <span>截止时间：${task.due}</span>
+        </li>`,
+    )
+    .join("");
+  return `<ul>${items}</ul>`;
+}
+
+function fixtureAResponses(): Record<string, FakeHttpResponse> {
+  const oldCourse = {
+    courseId: "101",
+    classId: "201",
+    cpi: "1",
+    title: "253-旧课",
+  };
+  const currentCourse = {
+    courseId: "102",
+    classId: "202",
+    cpi: "1",
+    title: "261-新课",
+  };
+  const electiveCourse = {
+    courseId: "103",
+    classId: "203",
+    cpi: "1",
+    title: "选修无学期",
+  };
+  return {
+    [AUTH_PROBE_URL]: AUTH_OK,
+    [COURSE_LIST_URL]: okHtml(
+      COURSE_LIST_URL,
+      enrolledCoursesHtml([oldCourse, currentCourse, electiveCourse]),
+    ),
+    [workListUrl(oldCourse.courseId, oldCourse.classId, oldCourse.cpi)]:
+      okHtml(
+        workListUrl(oldCourse.courseId, oldCourse.classId, oldCourse.cpi),
+        courseSpaceHtml([
+          {
+            id: "2531",
+            title: "旧课作业",
+            status: "未提交",
+            due: "2026-09-10 23:59",
+            courseId: oldCourse.courseId,
+            classId: oldCourse.classId,
+          },
+        ]),
+      ),
+    [workListUrl(
+      currentCourse.courseId,
+      currentCourse.classId,
+      currentCourse.cpi,
+    )]: okHtml(
+      workListUrl(
+        currentCourse.courseId,
+        currentCourse.classId,
+        currentCourse.cpi,
+      ),
+      courseSpaceHtml([
+        {
+          id: "2611",
+          title: "新课作业",
+          status: "未提交",
+          due: "2026-09-20 23:59",
+          courseId: currentCourse.courseId,
+          classId: currentCourse.classId,
+        },
+        {
+          id: "2612",
+          title: "新课打回",
+          status: "打回重做",
+          due: "2026-09-21 23:59",
+          courseId: currentCourse.courseId,
+          classId: currentCourse.classId,
+        },
+        {
+          id: "2613",
+          title: "新课已交",
+          status: "已提交",
+          due: "2026-09-18 23:59",
+          courseId: currentCourse.courseId,
+          classId: currentCourse.classId,
+        },
+        {
+          id: "2614",
+          title: "新课已结束",
+          status: "已结束",
+          due: "2026-09-01 23:59",
+          courseId: currentCourse.courseId,
+          classId: currentCourse.classId,
+        },
+        {
+          id: "2615",
+          title: "新课不可作答",
+          status: "不可作答",
+          due: "2026-09-01 23:59",
+          courseId: currentCourse.courseId,
+          classId: currentCourse.classId,
+        },
+        {
+          id: "2616",
+          title: "新课已完成",
+          status: "已完成",
+          due: "2026-09-01 23:59",
+          courseId: currentCourse.courseId,
+          classId: currentCourse.classId,
+        },
+      ]),
+    ),
+    [workListUrl(
+      electiveCourse.courseId,
+      electiveCourse.classId,
+      electiveCourse.cpi,
+    )]: okHtml(
+      workListUrl(
+        electiveCourse.courseId,
+        electiveCourse.classId,
+        electiveCourse.cpi,
+      ),
+      courseSpaceHtml([
+        {
+          id: "1031",
+          title: "选修作业",
+          status: "未提交",
+          due: "2026-09-25 23:59",
+          courseId: electiveCourse.courseId,
+          classId: electiveCourse.classId,
+        },
+      ]),
+    ),
+  };
+}
+
+function fixtureBResponses(): Record<string, FakeHttpResponse> {
+  const unlabeled = {
+    courseId: "201",
+    classId: "301",
+    cpi: "1",
+    title: "通识选修",
+  };
+  const alsoUnlabeled = {
+    courseId: "202",
+    classId: "302",
+    cpi: "1",
+    title: "讲座课",
+  };
+  return {
+    [AUTH_PROBE_URL]: AUTH_OK,
+    [COURSE_LIST_URL]: okHtml(
+      COURSE_LIST_URL,
+      enrolledCoursesHtml([unlabeled, alsoUnlabeled]),
+    ),
+    [workListUrl(unlabeled.courseId, unlabeled.classId, unlabeled.cpi)]:
+      okHtml(
+        workListUrl(unlabeled.courseId, unlabeled.classId, unlabeled.cpi),
+        courseSpaceHtml([
+          {
+            id: "2011",
+            title: "选修作业",
+            status: "未提交",
+            due: "2026-09-25 23:59",
+            courseId: unlabeled.courseId,
+            classId: unlabeled.classId,
+          },
+        ]),
+      ),
+    [workListUrl(
+      alsoUnlabeled.courseId,
+      alsoUnlabeled.classId,
+      alsoUnlabeled.cpi,
+    )]: okHtml(
+      workListUrl(
+        alsoUnlabeled.courseId,
+        alsoUnlabeled.classId,
+        alsoUnlabeled.cpi,
+      ),
+      courseSpaceHtml([
+        {
+          id: "2021",
+          title: "讲座作业",
+          status: "未提交",
+          due: "2026-09-26 23:59",
+          courseId: alsoUnlabeled.courseId,
+          classId: alsoUnlabeled.classId,
+        },
+      ]),
+    ),
   };
 }
 
@@ -124,12 +376,11 @@ describe("listTodos existing cookie", () => {
       },
     });
 
-    await assert.rejects(
-      () => listTodos("current_semester", fake.ports),
-      /listing 待办事项 is not implemented/,
-    );
-    assert.equal(fake.httpCallCount(), 1);
+    const result = await listTodos("current_semester", fake.ports);
+
+    assert.equal(fake.httpCallCount() >= 1, true);
     assert.equal(fake.openLoginCallCount(), 0);
+    assert.notEqual(result.status, "auth_expired");
   });
 
   test("opens login once when a stored cookie lands on a 学习通 login page", async () => {
@@ -193,5 +444,125 @@ describe("listTodos result secrecy", () => {
     assert.equal(json.includes("secret-cookie-value-xyz"), false);
     assert.equal(json.includes("13800138000"), false);
     assert.equal(json.includes("account-token"), false);
+  });
+});
+
+describe("listTodos fixture semester scope", () => {
+  test("default scope returns only still-open 待办事项 from current 学期代码 261", async () => {
+    const fake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: fixtureAResponses(),
+    });
+
+    const result = await listTodos("current_semester", fake.ports);
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.isError, false);
+    assert.equal(result.current_semester, "261");
+    assert.equal(result.scope, "current_semester");
+    assert.equal(result.sources_scanned.course_space, true);
+    assert.equal(result.sources_scanned.inbox, false);
+    assert.equal(fake.openLoginCallCount(), 0);
+    assert.deepEqual(
+      result.todos.map((todo) => todo.title),
+      ["新课作业", "新课打回"],
+    );
+    for (const todo of result.todos) {
+      assert.equal(todo.course_title, "261-新课");
+      assert.equal(todo.semester_code, "261");
+      assert.equal(todo.source, "course_space");
+    }
+    const openHomework = result.todos.find((todo) => todo.title === "新课作业");
+    assert.equal(openHomework?.due_at, "2026-09-20T23:59:00+08:00");
+    assert.equal("cookie" in result, false);
+    assert.equal("account" in result, false);
+    assert.equal(JSON.stringify(result).includes(VALID_COOKIE), false);
+  });
+
+  test("scope=all returns still-open 待办事项 from all enrolled courses including 选修无学期", async () => {
+    const fake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: fixtureAResponses(),
+    });
+
+    const result = await listTodos("all", fake.ports);
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.isError, false);
+    assert.equal(result.scope, "all");
+    assert.equal(result.current_semester, "261");
+    assert.equal(result.sources_scanned.course_space, true);
+    assert.equal(result.sources_scanned.inbox, false);
+    assert.deepEqual(
+      result.todos.map((todo) => ({
+        title: todo.title,
+        course_title: todo.course_title,
+        semester_code: todo.semester_code,
+        source: todo.source,
+      })),
+      [
+        {
+          title: "旧课作业",
+          course_title: "253-旧课",
+          semester_code: "253",
+          source: "course_space",
+        },
+        {
+          title: "新课作业",
+          course_title: "261-新课",
+          semester_code: "261",
+          source: "course_space",
+        },
+        {
+          title: "新课打回",
+          course_title: "261-新课",
+          semester_code: "261",
+          source: "course_space",
+        },
+        {
+          title: "选修作业",
+          course_title: "选修无学期",
+          semester_code: null,
+          source: "course_space",
+        },
+      ],
+    );
+  });
+
+  test("default scope returns no_semester_code as an error when no enrolled course has a 学期代码", async () => {
+    const fake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: fixtureBResponses(),
+    });
+
+    const result = await listTodos("current_semester", fake.ports);
+
+    assert.equal(result.status, "no_semester_code");
+    assert.equal(result.isError, true);
+    assert.notEqual(result.status, "ok");
+    assert.deepEqual(result.todos, []);
+    assert.equal(result.current_semester, null);
+    assert.equal(fake.openLoginCallCount(), 0);
+  });
+
+  test("excludes 已提交 已完成 已结束 不可作答 and keeps 打回重做", async () => {
+    const fake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: fixtureAResponses(),
+    });
+
+    const result = await listTodos("all", fake.ports);
+    const titles = result.todos.map((todo) => todo.title);
+
+    assert.equal(titles.includes("新课已交"), false);
+    assert.equal(titles.includes("新课已完成"), false);
+    assert.equal(titles.includes("新课已结束"), false);
+    assert.equal(titles.includes("新课不可作答"), false);
+    assert.equal(titles.includes("新课打回"), true);
+    const redo = result.todos.find((todo) => todo.title === "新课打回");
+    assert.equal(redo?.course_title, "261-新课");
+    assert.equal(redo?.semester_code, "261");
+    assert.equal(redo?.due_at, "2026-09-21T23:59:00+08:00");
+    assert.equal(redo?.source, "course_space");
   });
 });
