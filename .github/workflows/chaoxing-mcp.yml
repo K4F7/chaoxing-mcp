@@ -1,0 +1,47 @@
+name: Chaoxing MCP
+
+on:
+  push:
+    paths:
+      - ".github/workflows/chaoxing-mcp.yml"
+      - "packages/chaoxing-mcp/**"
+  pull_request:
+    paths:
+      - ".github/workflows/chaoxing-mcp.yml"
+      - "packages/chaoxing-mcp/**"
+  workflow_dispatch:
+
+concurrency:
+  group: chaoxing-mcp-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  mcp:
+    name: Typecheck and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: packages/chaoxing-mcp/package-lock.json
+
+      - name: Install MCP package
+        working-directory: packages/chaoxing-mcp
+        run: npm ci
+
+      - name: Typecheck MCP package
+        working-directory: packages/chaoxing-mcp
+        run: npm run typecheck
+
+      - name: Test MCP package
+        working-directory: packages/chaoxing-mcp
+        run: npm test
