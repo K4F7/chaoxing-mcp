@@ -1,9 +1,0 @@
-{
-  "model": "claude-sonnet-4-5",
-  "prompt": "Reply with exactly one short sentence for a load-test health check.",
-  "total_requests": 20,
-  "concurrency": 4,
-  "max_tokens": 64,
-  "timeout_seconds": 60,
-  "request_interval_seconds": 0
-}

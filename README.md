@@ -1,32 +1,11 @@
-# 学习通作业考试待办
+# 学习通课程作业
 
-从学习通收件箱和课程空间识别作业与考试，解析截止时间，在本机汇总成待办列表并在截止前提醒。
+本机 MCP server：让 agent 查询当前[受监控课程](CONTEXT.md)里的[待办事项](CONTEXT.md)。登录态只留在本机。术语见 [CONTEXT.md](CONTEXT.md)，方向见 [ADR-0002](docs/adr/0002-local-mcp-over-app.md)。
 
-工具在本机直接访问学习通，不经过任何自建服务端，凭据只保存在本机安全存储中。Windows 与 Android 各自独立完成抓取、存储与提醒，装一端即可使用，不需要配对。术语见 [CONTEXT.md](./CONTEXT.md)。
+实现尚未开始。
 
-## 项目结构
+## 分支
 
-- `apps/chaoxing_app/`：Flutter App，支持 Windows 和 Android。这是当前唯一的产品形态。
-- `docs/`：产品文档与架构决策记录。
-- `src/`、`scripts/`、`tests/`：早期 Cloudflare Worker 实现的遗留代码，已不参与 App 运行路径，仅作为解析行为的对照保留。
-
-## 使用
-
-见 [`apps/chaoxing_app/README.md`](./apps/chaoxing_app/README.md)：首次登录、Windows 运行与构建、Android 构建、安全边界与已知限制。
-
-## 验证
-
-```sh
-cd apps/chaoxing_app
-flutter analyze
-flutter test
-flutter build windows
-```
-
-遗留 Worker 代码的测试仍可单独运行，与 App 无依赖关系：
-
-```sh
-bun install
-bun run typecheck
-bun test
-```
+- `mcp`：当前方向，本机 MCP。
+- `archive/local-todo-app`：原先的 Windows / Android 待办 App（含遗留 Cloudflare Worker），只读对照。
+- `main`：归档时的快照，与 `archive/local-todo-app` 指向同一历史。
