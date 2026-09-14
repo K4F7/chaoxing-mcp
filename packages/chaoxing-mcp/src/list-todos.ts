@@ -1,3 +1,5 @@
+import { AUTH_PROBE_URL, looksLikeLoginPage } from "./login-page";
+
 export type TodoScope = "current_semester" | "all";
 
 export type ListTodosStatus =
@@ -88,6 +90,20 @@ function resolveScope(scope: string | undefined): TodoScope | null {
   return null;
 }
 
+async function openLoginAndExpire(
+  ports: ListTodosPorts,
+  scope: TodoScope,
+): Promise<ListTodosResult> {
+  try {
+    await ports.openLogin.openLogin();
+  } catch {
+    // Login wait timeout (or other login failure) is still 认证失效.
+  }
+  return unscannedResult("auth_expired", scope, [
+    { where: "credentials", message: "认证失效" },
+  ]);
+}
+
 export async function listTodos(
   scope: string | undefined,
   ports: ListTodosPorts,
@@ -101,9 +117,12 @@ export async function listTodos(
 
   const cookie = await ports.credentials.getCookie();
   if (cookie == null || cookie.trim() === "") {
-    return unscannedResult("auth_expired", resolved, [
-      { where: "credentials", message: "认证失效" },
-    ]);
+    return openLoginAndExpire(ports, resolved);
+  }
+
+  const response = await ports.http.request({ url: AUTH_PROBE_URL, cookie });
+  if (looksLikeLoginPage(response.url, response.body)) {
+    return openLoginAndExpire(ports, resolved);
   }
 
   throw new Error("listing 待办事项 is not implemented");
