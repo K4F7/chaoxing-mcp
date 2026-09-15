@@ -13,16 +13,67 @@ const CHAOXING_LOGIN_URL =
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 const POLL_INTERVAL_MS = 2_000;
 
+const MISSING_CHROME_MESSAGE =
+  "Chrome is not installed or the chrome channel is missing. Interactive 学习通 login needs Google Chrome.";
+
+const NO_DISPLAY_MESSAGE =
+  "Cannot open 学习通 login UI (no display / headless). Log in once on a machine with a desktop so the cookie is in the keychain, then retry.";
+
+export function cannotOpenLoginUiMessage(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): string | null {
+  if (platform === "win32" || platform === "darwin") {
+    return null;
+  }
+  const display = env.DISPLAY;
+  if (display == null || display.trim() === "") {
+    return NO_DISPLAY_MESSAGE;
+  }
+  return null;
+}
+
+export function describeLoginFailure(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  const text = raw.trim();
+  if (
+    /chromium distribution ['"]?chrome['"]? is not found/i.test(text) ||
+    /executable doesn't exist/i.test(text) ||
+    /browserType\.launch.*chrome/i.test(text)
+  ) {
+    return MISSING_CHROME_MESSAGE;
+  }
+  if (
+    /missing x server/i.test(text) ||
+    /headed browser without having a xserver/i.test(text) ||
+    /no display/i.test(text) ||
+    /\$DISPLAY/i.test(text)
+  ) {
+    return NO_DISPLAY_MESSAGE;
+  }
+  return text.length > 0 ? text : "认证失效";
+}
+
 export function createPassportOpenLogin(
   credentials: WritableCredentialStore,
-  options: { timeoutMs?: number } = {},
+  options: {
+    timeoutMs?: number;
+    env?: NodeJS.ProcessEnv;
+    platform?: NodeJS.Platform;
+  } = {},
 ): OpenLogin {
   const timeoutMs = options.timeoutMs ?? LOGIN_TIMEOUT_MS;
+  const env = options.env ?? process.env;
+  const platform = options.platform ?? process.platform;
   return {
     async openLogin() {
       console.error("Opening 学习通 login at passport2.chaoxing.com");
       let context: BrowserContext | undefined;
       try {
+        const blocked = cannotOpenLoginUiMessage(env, platform);
+        if (blocked != null) {
+          throw new Error(blocked);
+        }
         context = await chromium.launchPersistentContext(
           join(homedir(), ".chaoxinghelper", "chrome-profile"),
           {
@@ -36,11 +87,9 @@ export function createPassportOpenLogin(
         const cookie = await waitForValidCookie(context, timeoutMs);
         await credentials.setCookie(cookie);
       } catch (error) {
-        console.error(
-          "学习通 login failed:",
-          error instanceof Error ? error.message : String(error),
-        );
-        throw error;
+        const message = describeLoginFailure(error);
+        console.error("学习通 login failed:", message);
+        throw new Error(message, { cause: error });
       } finally {
         await context?.close();
       }

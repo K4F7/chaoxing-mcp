@@ -1,0 +1,5 @@
+# Spawn from the repo root so --prefix resolves. Nested grok cwd will miss the package.
+[mcp_servers.chaoxing]
+command = "npm"
+args = ["start", "--silent", "--prefix", "packages/chaoxing-mcp"]
+startup_timeout_sec = 60

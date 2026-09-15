@@ -11,6 +11,7 @@
 - `packages/chaoxing-domain/`：可移植的 TypeScript 领域切片（同步、解析、认证、提醒规则、URL 信任分级、诊断脱敏）。
 - `packages/chaoxing-android-alarms/`：Android 预排闹钟。
 - `packages/chaoxing-android-http/`：OkHttp + CookieManager，补上 JS `fetch` 读不到 `Set-Cookie` 的缺口。
+- `packages/chaoxing-mcp/`：本机 stdio MCP（唯一工具 `list_todos`）。见 [`docs/mcp.md`](./docs/mcp.md)。
 - `legacy/chaoxing_app/`：Flutter 参考实现，**不是**生产出货路径。
 - `docs/`：产品文档与架构决策记录。
 - `src/`、`scripts/`、`tests/`：早期 Cloudflare Worker 实现的遗留代码，已不参与 App 运行路径。
@@ -19,6 +20,16 @@
 
 - Android：见 [`apps/chaoxing_rn/README.md`](./apps/chaoxing_rn/README.md)。需要开发构建（`npx expo run:android`）才能读 HttpOnly Cookie。
 - Windows：见 [`apps/chaoxing_windows/README.md`](./apps/chaoxing_windows/README.md)。C# 外壳与安装器在 Windows SDK 上构建。
+- MCP（Grok Bot / Cursor stdio）：见 [`docs/mcp.md`](./docs/mcp.md)。先 `cd packages/chaoxing-mcp && npm ci`，工作区用仓库根。`.grok/config.toml` 与 Cursor `AddMcpServer` 同一组参数：
+
+```toml
+[mcp_servers.chaoxing]
+command = "npm"
+args = ["start", "--silent", "--prefix", "packages/chaoxing-mcp"]
+startup_timeout_sec = 60
+```
+
+工具只有 `list_todos`。凭据在本机钥匙串，不要当工具参数传入。无头 / 无 Chrome / 无显示时登录无法完成，会返回 `auth_expired`（不是「没有作业」）；可先在有桌面的机器登录写入钥匙串再查询。
 
 ## 验证
 
@@ -28,6 +39,7 @@
 cd packages/chaoxing-domain && npm test && npm run typecheck
 cd ../chaoxing-android-alarms && npm test && npm run typecheck
 cd ../chaoxing-android-http && npm ci && npm test && npm run typecheck
+cd ../chaoxing-mcp && npm ci && npm test && npm run typecheck
 cd ../../apps/chaoxing_rn && npm test && npm run typecheck
 cd ../chaoxing_windows && npm ci && npm test && npm run typecheck
 ```
