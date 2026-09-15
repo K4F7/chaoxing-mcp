@@ -10,6 +10,7 @@
   },
   "scripts": {
     "start": "node --import tsx src/stdio.ts",
+    "login": "node --import tsx src/login-cli.ts",
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
@@ -23,5 +24,8 @@
   "devDependencies": {
     "@types/node": "22.18.0",
     "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=18.14.0"
   }
 }

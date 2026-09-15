@@ -6,6 +6,7 @@ import {
   cannotOpenLoginUiMessage,
   createPassportOpenLogin,
   describeLoginFailure,
+  passwordLoginHeadless,
 } from "../src/open-login";
 
 const emptyStore: WritableCredentialStore = {
@@ -64,6 +65,19 @@ describe("cannotOpenLoginUiMessage", () => {
 
   test("is null on darwin without DISPLAY", () => {
     assert.equal(cannotOpenLoginUiMessage({}, "darwin"), null);
+  });
+});
+
+describe("passwordLoginHeadless", () => {
+  test("matches cannotOpenLoginUiMessage: headless when the login UI cannot open", () => {
+    assert.equal(
+      passwordLoginHeadless({ HOME: "/tmp" }, "linux"),
+      cannotOpenLoginUiMessage({ HOME: "/tmp" }, "linux") != null,
+    );
+    assert.equal(
+      passwordLoginHeadless({ DISPLAY: ":0" }, "linux"),
+      cannotOpenLoginUiMessage({ DISPLAY: ":0" }, "linux") != null,
+    );
   });
 });
 

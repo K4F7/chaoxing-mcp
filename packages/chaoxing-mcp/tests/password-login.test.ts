@@ -1,15 +1,25 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
+import { createDecipheriv } from "node:crypto";
+
 import type { WritableCredentialStore } from "../src/credentials";
 import { listTodos, type ListTodosPorts } from "../src/index";
 import { AUTH_PROBE_URL } from "../src/login-page";
 import {
   createPassportOpenLogin,
   envPasswordCredentialSource,
+  passwordLoginHeadless,
   type PasswordCredentials,
   type PasswordLoginRunner,
 } from "../src/open-login";
+import {
+  createFallbackPasswordLogin,
+  createHttpPasswordLogin,
+  encryptPassportField,
+  FANYA_LOGIN_URL,
+  redactLoginSecrets,
+} from "../src/password-login";
 import { COURSE_LIST_URL, INBOX_URL, courseWorkListUrl } from "../src/chaoxing-urls";
 
 const VALID_COOKIE = "UID=1; vc3=abc";
@@ -179,5 +189,266 @@ describe("createPassportOpenLogin password path", () => {
     assert.equal(result.status, "ok");
     assert.equal(result.todos.length, 1);
     assert.equal(store.cookie, VALID_COOKIE);
+  });
+});
+
+describe("passwordLoginHeadless", () => {
+  test("is true on linux without DISPLAY", () => {
+    assert.equal(passwordLoginHeadless({ HOME: "/tmp" }, "linux"), true);
+  });
+
+  test("is false on linux with DISPLAY", () => {
+    assert.equal(passwordLoginHeadless({ DISPLAY: ":0" }, "linux"), false);
+  });
+
+  test("is false on darwin without DISPLAY", () => {
+    assert.equal(passwordLoginHeadless({}, "darwin"), false);
+  });
+});
+
+describe("encryptPassportField", () => {
+  test("round-trips a dummy value with the public passport AES key", () => {
+    const plain = "dummy-not-a-real-password";
+    const encrypted = encryptPassportField(plain);
+    assert.notEqual(encrypted, plain);
+    const key = Buffer.from("u2oh6Vu^HWe4_AES", "utf8");
+    const decipher = createDecipheriv("aes-128-cbc", key, key);
+    const decoded = Buffer.concat([
+      decipher.update(Buffer.from(encrypted, "base64")),
+      decipher.final(),
+    ]).toString("utf8");
+    assert.equal(decoded, plain);
+  });
+});
+
+describe("createHttpPasswordLogin", () => {
+  const creds: PasswordCredentials = {
+    username: "alice",
+    password: "s3cret-value",
+  };
+
+  function memoryStore(): WritableCredentialStore & { cookie: string | null } {
+    return {
+      cookie: null,
+      async getCookie() {
+        return this.cookie;
+      },
+      async setCookie(cookie: string) {
+        this.cookie = cookie;
+      },
+    };
+  }
+
+  test("fake fetch success writes session cookie and does not POST plaintext password", async () => {
+    const store = memoryStore();
+    const calls: { url: string; body: string }[] = [];
+    const login = createHttpPasswordLogin(store, {
+      fetchImpl: async (url, init) => {
+        calls.push({ url, body: String(init?.body ?? "") });
+        const headers = new Headers();
+        headers.append("set-cookie", "UID=1; Domain=.chaoxing.com; Path=/");
+        headers.append("set-cookie", "vc3=abc; Domain=.chaoxing.com; Path=/");
+        return new Response(JSON.stringify({ status: true, url: "https://i.chaoxing.com" }), {
+          status: 200,
+          headers,
+        });
+      },
+    });
+
+    await login.loginWithPassword(creds);
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]?.url, FANYA_LOGIN_URL);
+    assert.doesNotMatch(calls[0]?.body ?? "", /s3cret-value/);
+    assert.match(calls[0]?.body ?? "", /uname=/);
+    assert.match(calls[0]?.body ?? "", /password=/);
+    assert.equal(store.cookie, "UID=1; vc3=abc");
+  });
+
+  test("rejects an untrusted login URL without issuing fetch", async () => {
+    const store = memoryStore();
+    let fetches = 0;
+    const login = createHttpPasswordLogin(store, {
+      loginUrl: "https://example.com/steal",
+      fetchImpl: async () => {
+        fetches += 1;
+        return new Response("should not run", { status: 200 });
+      },
+    });
+
+    await assert.rejects(
+      () => login.loginWithPassword(creds),
+      /untrusted_cookie_request_target/,
+    );
+    assert.equal(fetches, 0);
+    assert.equal(store.cookie, null);
+  });
+
+  test("captcha JSON body fails clearly without storing a cookie or leaking the password", async () => {
+    const store = memoryStore();
+    const login = createHttpPasswordLogin(store, {
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({ status: false, msg2: "请输入验证码" }),
+          { status: 200 },
+        ),
+    });
+
+    await assert.rejects(
+      () => login.loginWithPassword(creds),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /captcha|验证码/i);
+        assert.doesNotMatch(error.message, /s3cret-value/);
+        return true;
+      },
+    );
+    assert.equal(store.cookie, null);
+  });
+
+  test("error JSON body fails clearly without leaking the password", async () => {
+    const store = memoryStore();
+    const login = createHttpPasswordLogin(store, {
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({ status: false, msg2: "用户名或密码错误" }),
+          { status: 200 },
+        ),
+    });
+
+    await assert.rejects(
+      () => login.loginWithPassword(creds),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /用户名或密码错误|failed/i);
+        assert.doesNotMatch(error.message, /s3cret-value/);
+        return true;
+      },
+    );
+    assert.equal(store.cookie, null);
+  });
+
+  test("风控 HTML body fails clearly", async () => {
+    const store = memoryStore();
+    const login = createHttpPasswordLogin(store, {
+      fetchImpl: async () =>
+        new Response("很抱歉，您所浏览的页面暂时不能访问！", { status: 200 }),
+    });
+
+    await assert.rejects(
+      () => login.loginWithPassword(creds),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /风控/);
+        return true;
+      },
+    );
+    assert.equal(store.cookie, null);
+  });
+});
+
+describe("createFallbackPasswordLogin", () => {
+  test("uses Playwright fallback when HTTP fails and does not leak the password", async () => {
+    const store: WritableCredentialStore & { cookie: string | null } = {
+      cookie: null,
+      async getCookie() {
+        return this.cookie;
+      },
+      async setCookie(cookie: string) {
+        this.cookie = cookie;
+      },
+    };
+    const login = createFallbackPasswordLogin(
+      {
+        async loginWithPassword() {
+          throw new Error("captcha required for alice / s3cret-value");
+        },
+      },
+      {
+        async loginWithPassword() {
+          await store.setCookie(VALID_COOKIE);
+        },
+      },
+    );
+
+    await login.loginWithPassword({
+      username: "alice",
+      password: "s3cret-value",
+    });
+    assert.equal(store.cookie, VALID_COOKIE);
+  });
+
+  test("combines HTTP and Playwright errors without leaking the password", async () => {
+    const login = createFallbackPasswordLogin(
+      {
+        async loginWithPassword() {
+          throw new Error("HTTP failed for s3cret-value");
+        },
+      },
+      {
+        async loginWithPassword() {
+          throw new Error("Playwright failed for s3cret-value");
+        },
+      },
+    );
+
+    await assert.rejects(
+      () =>
+        login.loginWithPassword({
+          username: "alice",
+          password: "s3cret-value",
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /Playwright fallback/i);
+        assert.doesNotMatch(error.message, /s3cret-value/);
+        assert.match(error.message, /已隐藏/);
+        assert.ok(error.cause instanceof Error);
+        assert.doesNotMatch(error.cause.message, /s3cret-value/);
+        return true;
+      },
+    );
+  });
+});
+
+describe("redactLoginSecrets", () => {
+  test("replaces username and password", () => {
+    assert.equal(
+      redactLoginSecrets("user alice pass s3cret-value", {
+        username: "alice",
+        password: "s3cret-value",
+      }),
+      "user [已隐藏] pass [已隐藏]",
+    );
+  });
+});
+
+describe("createPassportOpenLogin HTTP default", () => {
+  test("fake HTTP success writes cookie without a PasswordLogin port", async () => {
+    const store: WritableCredentialStore & { cookie: string | null } = {
+      cookie: null,
+      async getCookie() {
+        return this.cookie;
+      },
+      async setCookie(cookie: string) {
+        this.cookie = cookie;
+      },
+    };
+    const openLogin = createPassportOpenLogin(store, {
+      env: { CHAOXING_USERNAME: "alice", CHAOXING_PASSWORD: "s3cret-value" },
+      platform: "linux",
+      fetchImpl: async () => {
+        const headers = new Headers();
+        headers.append("set-cookie", "UID=1; Domain=.chaoxing.com");
+        headers.append("set-cookie", "vc3=abc; Domain=.chaoxing.com");
+        return new Response(JSON.stringify({ status: true }), {
+          status: 200,
+          headers,
+        });
+      },
+    });
+
+    await openLogin.openLogin();
+    assert.equal(store.cookie, "UID=1; vc3=abc");
   });
 });
