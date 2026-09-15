@@ -38,12 +38,19 @@ export type SourcesScanned = {
   inbox: boolean;
 };
 
+export type ScannedCourseSummary = {
+  id: string;
+  title: string;
+  semester_code: string | null;
+};
+
 export type ListTodosResult = {
   isError: boolean;
   status: ListTodosStatus;
   scope: TodoScope | null;
   current_semester: string | null;
   sources_scanned: SourcesScanned;
+  courses_scanned: ScannedCourseSummary[];
   todos: TodoItem[];
   unmatched_assignment_notices: number;
   errors: ListTodosError[];
@@ -53,12 +60,22 @@ export type CredentialStore = {
   getCookie(): Promise<string | null>;
 };
 
+export type ChaoxingHttpRequest = {
+  url: string;
+  cookie: string;
+  method?: "GET" | "POST";
+  form?: Record<string, string>;
+  headers?: Record<string, string>;
+};
+
+export type ChaoxingHttpResponse = {
+  statusCode: number;
+  url: string;
+  body: string;
+};
+
 export type ChaoxingHttp = {
-  request(input: { url: string; cookie: string }): Promise<{
-    statusCode: number;
-    url: string;
-    body: string;
-  }>;
+  request(input: ChaoxingHttpRequest): Promise<ChaoxingHttpResponse>;
 };
 
 export type OpenLogin = {
@@ -75,6 +92,7 @@ function unscannedResult(
   status: ListTodosStatus,
   scope: TodoScope | null,
   errors: ListTodosError[],
+  courses_scanned: ScannedCourseSummary[] = [],
 ): ListTodosResult {
   return {
     isError: true,
@@ -82,11 +100,37 @@ function unscannedResult(
     scope,
     current_semester: null,
     sources_scanned: { course_space: false, inbox: false },
+    courses_scanned,
     todos: [],
     unmatched_assignment_notices: 0,
     errors,
   };
 }
+
+function summarizeCourses(
+  courses: readonly { courseId: string; title: string }[],
+): ScannedCourseSummary[] {
+  return courses.map((course) => ({
+    id: course.courseId,
+    title: course.title,
+    semester_code: semesterCodeOf(course.title),
+  }));
+}
+
+const STUDENT_COURSE_LIST_FORM = {
+  courseType: "1",
+  courseFolderId: "0",
+  baseEducation: "0",
+  superstarClass: "",
+  courseFolderSize: "0",
+} as const;
+
+const STUDENT_COURSE_LIST_HEADERS = {
+  "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+  Origin: "https://mooc1-1.chaoxing.com",
+  Referer: "https://mooc1-1.chaoxing.com/visit/interaction",
+  "X-Requested-With": "XMLHttpRequest",
+} as const;
 
 function isSuccessfulHttp(statusCode: number): boolean {
   return statusCode >= 200 && statusCode < 300;
@@ -210,6 +254,9 @@ export async function listTodos(
     coursesResponse = await ports.http.request({
       url: COURSE_LIST_URL,
       cookie,
+      method: "POST",
+      form: { ...STUDENT_COURSE_LIST_FORM },
+      headers: { ...STUDENT_COURSE_LIST_HEADERS },
     });
   } catch {
     coursesResponse = undefined;
@@ -223,11 +270,15 @@ export async function listTodos(
     ]);
   }
   const courses = parseEnrolledCourses(coursesResponse.body);
+  const coursesScanned = summarizeCourses(courses);
   const currentSemester = currentSemesterOf(courses);
   if (resolved === "current_semester" && currentSemester === null) {
-    return unscannedResult("no_semester_code", resolved, [
-      { where: "courses", message: "解析不到学期代码" },
-    ]);
+    return unscannedResult(
+      "no_semester_code",
+      resolved,
+      [{ where: "courses", message: "解析不到学期代码" }],
+      coursesScanned,
+    );
   }
 
   const inScope =
@@ -328,6 +379,7 @@ export async function listTodos(
       course_space: courseSpaceSuccesses > 0,
       inbox: inboxScanned,
     },
+    courses_scanned: coursesScanned,
     todos,
     unmatched_assignment_notices: unmatchedAssignmentNotices,
     errors,

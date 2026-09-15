@@ -27,6 +27,13 @@ const AUTH_OK = okHtml(
   "<title>个人空间</title><div>收件箱</div>",
 );
 
+type RecordedHttpRequest = {
+  url: string;
+  method?: string;
+  form?: Record<string, string>;
+  headers?: Record<string, string>;
+};
+
 function createPorts(options: {
   cookie?: string | null;
   httpResponse?: FakeHttpResponse;
@@ -37,10 +44,12 @@ function createPorts(options: {
   store: FakeStore;
   openLoginCallCount: () => number;
   httpCallCount: () => number;
+  httpRequests: () => RecordedHttpRequest[];
 } {
   const store: FakeStore = { cookie: options.cookie ?? null };
   let openLoginCallCount = 0;
   let httpCallCount = 0;
+  const httpRequests: RecordedHttpRequest[] = [];
   const ports: ListTodosPorts = {
     credentials: {
       async getCookie() {
@@ -48,9 +57,15 @@ function createPorts(options: {
       },
     },
     http: {
-      async request({ url }) {
+      async request(input) {
         httpCallCount += 1;
-        const mapped = options.httpByUrl?.[url];
+        httpRequests.push({
+          url: input.url,
+          method: input.method,
+          form: input.form,
+          headers: input.headers,
+        });
+        const mapped = options.httpByUrl?.[input.url];
         if (mapped !== undefined) {
           return mapped;
         }
@@ -58,7 +73,7 @@ function createPorts(options: {
           return options.httpResponse;
         }
         throw new Error(
-          `listTodos must not hit the network in this slice: ${url}`,
+          `listTodos must not hit the network in this slice: ${input.url}`,
         );
       },
     },
@@ -76,6 +91,7 @@ function createPorts(options: {
     store,
     openLoginCallCount: () => openLoginCallCount,
     httpCallCount: () => httpCallCount,
+    httpRequests: () => httpRequests,
   };
 }
 
@@ -1256,5 +1272,104 @@ describe("listTodos inbox", () => {
       true,
     );
     assert.equal(JSON.stringify(result).includes(VALID_COOKIE), false);
+  });
+});
+
+describe("listTodos student courselist POST", () => {
+  test("requests courselistdata with courseType=1 form body", async () => {
+    const fake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: fixtureAResponses(),
+    });
+    await listTodos("current_semester", fake.ports);
+    const courseList = fake
+      .httpRequests()
+      .find((req) => req.url === COURSE_LIST_URL);
+    assert.ok(courseList);
+    assert.equal(courseList?.method, "POST");
+    assert.equal(courseList?.form?.courseType, "1");
+    assert.equal(courseList?.form?.courseFolderId, "0");
+    assert.equal(
+      courseList?.headers?.["X-Requested-With"],
+      "XMLHttpRequest",
+    );
+  });
+
+  test("returns courses_scanned summary without cookies", async () => {
+    const fake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: fixtureAResponses(),
+    });
+    const result = await listTodos("current_semester", fake.ports);
+    assert.equal(result.status, "ok");
+    assert.deepEqual(result.courses_scanned, [
+      { id: "101", title: "253-旧课", semester_code: "253" },
+      { id: "102", title: "261-新课", semester_code: "261" },
+      { id: "103", title: "选修无学期", semester_code: null },
+    ]);
+    assert.equal(JSON.stringify(result).includes(VALID_COOKIE), false);
+  });
+
+  test("nested move-to student HTML yields semester codes; teacher junk alone would not", async () => {
+    const studentHtml = `
+      <ul id="courseList">
+        <li class="course" courseid="1001" clazzid="2001" personid="3001">
+          <div class="hanlde-list"><ul><li class="move-to">移入</li></ul></div>
+          <div class="course-info">
+            <span class="course-name overHidden2" title="261学期 计算机组成原理">261学期 计算机组成原理</span>
+          </div>
+        </li>
+        <li class="course" courseid="9999" clazzid="0" personid="1">
+          <span class="course-name overHidden2" title=""></span>
+        </li>
+      </ul>`;
+    const teacherOnlyHtml = `
+      <ul id="courseList">
+        <li class="course" courseid="9999" clazzid="0" personid="1">
+          <span class="course-name"></span>
+        </li>
+      </ul>`;
+    const work = workListUrl("1001", "2001", "3001");
+    const fake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: {
+        [AUTH_PROBE_URL]: AUTH_OK,
+        [COURSE_LIST_URL]: okHtml(COURSE_LIST_URL, studentHtml),
+        [work]: okHtml(
+          work,
+          courseSpaceHtml([
+            {
+              id: "t1",
+              title: "组成作业",
+              status: "未提交",
+              due: "2026-09-30 23:59",
+              courseId: "1001",
+              classId: "2001",
+            },
+          ]),
+        ),
+        [INBOX_URL]: okHtml(INBOX_URL, inboxHtml([])),
+      },
+    });
+    const result = await listTodos("current_semester", fake.ports);
+    assert.equal(result.status, "ok");
+    assert.equal(result.current_semester, "261");
+    assert.equal(result.courses_scanned.length, 1);
+    assert.equal(result.courses_scanned[0]?.title, "261学期 计算机组成原理");
+    assert.equal(result.todos.length, 1);
+
+    const teacherFake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: {
+        [AUTH_PROBE_URL]: AUTH_OK,
+        [COURSE_LIST_URL]: okHtml(COURSE_LIST_URL, teacherOnlyHtml),
+        [INBOX_URL]: okHtml(INBOX_URL, inboxHtml([])),
+      },
+    });
+    const teacherResult = await listTodos(
+      "current_semester",
+      teacherFake.ports,
+    );
+    assert.equal(teacherResult.status, "no_semester_code");
   });
 });
