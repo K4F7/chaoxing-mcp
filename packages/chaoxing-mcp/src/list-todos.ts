@@ -4,8 +4,10 @@ import { AUTH_PROBE_URL, looksLikeLoginPage } from "./login-page";
 import {
   currentSemesterOf,
   dueAtFromRemaining,
+  extractDoHomeworkUrls,
   parseCourseSpaceTodos,
   parseEnrolledCourses,
+  parseHomeworkPrompt,
   parseInboxNotices,
   parseWorkDetailDueAt,
   semesterCodeOf,
@@ -36,6 +38,8 @@ export type TodoItem = {
   source: string;
   course_id: string | null;
   class_id: string | null;
+  summary: string | null;
+  kind: string | null;
 };
 
 export type SourcesScanned = {
@@ -158,25 +162,70 @@ function resolveTrustedWorkUrl(raw: string | null): string | null {
   }
 }
 
-async function dueAtFromWorkDetail(
+type WorkPageExtras = {
+  dueAt: string | null;
+  summary: string | null;
+  kind: string | null;
+};
+
+const EMPTY_WORK_PAGE_EXTRAS: WorkPageExtras = {
+  dueAt: null,
+  summary: null,
+  kind: null,
+};
+
+async function extrasFromWorkPages(
   http: ChaoxingHttp,
   cookie: string,
   entryUrl: string | null,
   now: Date,
-): Promise<string | null> {
+): Promise<WorkPageExtras> {
   const url = resolveTrustedWorkUrl(entryUrl);
   if (url == null) {
-    return null;
+    return EMPTY_WORK_PAGE_EXTRAS;
   }
   try {
     const response = await http.request({ url, cookie });
     if (!isSuccessfulHttp(response.statusCode)) {
-      return null;
+      return EMPTY_WORK_PAGE_EXTRAS;
     }
-    return parseWorkDetailDueAt(response.body, now);
+    const prompt = await homeworkPromptFromTaskWork(
+      http,
+      cookie,
+      response.body,
+    );
+    return {
+      dueAt: parseWorkDetailDueAt(response.body, now),
+      summary: prompt.summary,
+      kind: prompt.kind,
+    };
   } catch {
-    return null;
+    return EMPTY_WORK_PAGE_EXTRAS;
   }
+}
+
+async function homeworkPromptFromTaskWork(
+  http: ChaoxingHttp,
+  cookie: string,
+  taskWorkHtml: string,
+): Promise<{ summary: string | null; kind: string | null }> {
+  const empty = { summary: null, kind: null };
+  for (const raw of extractDoHomeworkUrls(taskWorkHtml)) {
+    const url = resolveTrustedWorkUrl(raw);
+    if (url == null) {
+      continue;
+    }
+    try {
+      const response = await http.request({ url, cookie });
+      if (!isSuccessfulHttp(response.statusCode)) {
+        return empty;
+      }
+      return parseHomeworkPrompt(response.body);
+    } catch {
+      return empty;
+    }
+  }
+  return empty;
 }
 
 function resolveScope(scope: string | undefined): TodoScope | null {
@@ -358,14 +407,19 @@ export async function listTodos(
         continue;
       }
       let dueAt = task.due_at;
+      let summary: string | null = null;
+      let kind: string | null = null;
       if (dueAt == null) {
+        const extras = await extrasFromWorkPages(
+          ports.http,
+          cookie,
+          task.entry_url,
+          now,
+        );
         dueAt =
-          (await dueAtFromWorkDetail(
-            ports.http,
-            cookie,
-            task.entry_url,
-            now,
-          )) ?? dueAtFromRemaining(task.remaining_text ?? "", now);
+          extras.dueAt ?? dueAtFromRemaining(task.remaining_text ?? "", now);
+        summary = extras.summary;
+        kind = extras.kind;
       }
       todos.push({
         id: task.id,
@@ -376,6 +430,8 @@ export async function listTodos(
         source: "course_space",
         course_id: course.courseId,
         class_id: course.classId,
+        summary,
+        kind,
       });
     }
   }
@@ -417,6 +473,8 @@ export async function listTodos(
         source: "inbox",
         course_id: course.courseId,
         class_id: course.classId,
+        summary: null,
+        kind: null,
       });
     }
   } else {

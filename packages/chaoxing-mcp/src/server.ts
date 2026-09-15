@@ -9,6 +9,7 @@ const LIST_TODOS_DESCRIPTION = [
   "Pass scope=all at a semester boundary, or when older enrolled courses may still have unfinished 待办事项; do not merge semesters silently.",
   "status ok with an empty todos list means none are still open.",
   "认证失效 (auth_expired) and other failures are errors (isError), never a successful empty list.",
+  "Each todo may include a plain-text 题干 summary and optional kind (e.g. 简答题) from doHomeWork; summary is null when that page is missing or fails.",
   "Do not pass accounts or cookies; this tool never returns them.",
 ].join(" ");
 
