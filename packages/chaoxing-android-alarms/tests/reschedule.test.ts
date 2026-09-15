@@ -5,7 +5,7 @@ import {
   addHours,
   emptyReminderHistory,
   planReminders,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 
 import {
   ExactAlarmPermissionError,

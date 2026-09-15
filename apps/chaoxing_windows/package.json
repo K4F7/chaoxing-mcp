@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@chaoxinghelper/domain": "file:../../packages/chaoxing-domain"
+    "@chaoxing-mcp/domain": "file:../../packages/chaoxing-domain"
   },
   "devDependencies": {
     "@types/node": "22.18.0",

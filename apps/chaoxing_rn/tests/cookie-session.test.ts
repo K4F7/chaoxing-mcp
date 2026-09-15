@@ -5,7 +5,7 @@ import { CookieVault } from "../src/auth/cookie-vault";
 import { MemorySecureStore } from "../src/auth/secure-store";
 import { SessionController } from "../src/auth/session-controller";
 import { wrapCookieAwareClient } from "../src/http/fetch-client";
-import type { ChaoxingHttpClient } from "@chaoxinghelper/domain";
+import type { ChaoxingHttpClient } from "@chaoxing-mcp/domain";
 
 describe("session cookie rotation", () => {
   test("replaceCookieSource writes the vault without re-auth", async () => {

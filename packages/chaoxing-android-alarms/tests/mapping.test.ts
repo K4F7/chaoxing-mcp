@@ -6,7 +6,7 @@ import {
   emptyReminderHistory,
   planReminders,
   ReminderIntensity,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 
 import {
   AlarmLimitExceededError,

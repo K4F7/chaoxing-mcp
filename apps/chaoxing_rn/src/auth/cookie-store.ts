@@ -1,7 +1,7 @@
 import {
   isTrustedChaoxingCookieDomain,
   normalizeChaoxingDomain,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 
 export const COOKIE_STORE_FORMAT = "chaoxing-cookie-store-v1";
 

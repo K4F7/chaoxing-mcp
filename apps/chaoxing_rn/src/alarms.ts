@@ -9,12 +9,12 @@ import {
   type AndroidAlarmPlan,
   type NativeAlarmModule,
   type RescheduleResult,
-} from "@chaoxinghelper/android-alarms";
+} from "@chaoxing-mcp/android-alarms";
 import {
   emptyReminderHistory,
   planReminders,
   type PlannedReminder,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 
 import { sampleTodos } from "./preview";
 

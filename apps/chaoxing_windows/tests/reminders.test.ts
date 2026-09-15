@@ -6,7 +6,7 @@ import {
   reminderKey,
   SyncItemKind,
   type SyncItem,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 
 import {
   deliverDueReminders,

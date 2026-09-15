@@ -1,4 +1,4 @@
-import { trustedChaoxingRequestHosts } from "@chaoxinghelper/domain";
+import { trustedChaoxingRequestHosts } from "@chaoxing-mcp/domain";
 
 import {
   type AndroidWebViewCookie,

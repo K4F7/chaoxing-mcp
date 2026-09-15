@@ -7,7 +7,7 @@ import {
   markReminderSent,
   pruneReminderHistory,
   SyncItemKind,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 
 import { AppDataStore } from "../src/persist/app-store";
 import { MemoryJsonStore } from "../src/persist/json-store";

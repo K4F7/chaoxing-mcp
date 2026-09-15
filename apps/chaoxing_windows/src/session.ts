@@ -1,7 +1,7 @@
 import {
   hasChaoxingIdentityCookieSource,
   isSafeChaoxingCookieSource,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 
 import { CookieVault } from "./persist/cookie-vault";
 

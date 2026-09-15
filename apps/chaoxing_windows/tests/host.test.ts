@@ -8,7 +8,7 @@ import {
   SyncItemKind,
   type LocalSyncRunner,
   type SyncItem,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 
 import { AutostartService, MemoryAutostartStore } from "../src/autostart";
 import { WindowsHost } from "../src/host";

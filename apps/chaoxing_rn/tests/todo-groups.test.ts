@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { SyncDisplayStatus, SyncItemKind, type SyncItem } from "@chaoxinghelper/domain";
+import { SyncDisplayStatus, SyncItemKind, type SyncItem } from "@chaoxing-mcp/domain";
 
 import { groupTodoItems, trustedItemUrl } from "../src/sync/todo-groups";
 

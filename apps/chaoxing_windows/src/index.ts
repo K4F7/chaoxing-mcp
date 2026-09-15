@@ -1,4 +1,4 @@
-import { createLocalSyncRunner } from "@chaoxinghelper/domain";
+import { createLocalSyncRunner } from "@chaoxing-mcp/domain";
 
 import { AutostartService, MemoryAutostartStore } from "./autostart";
 import { WindowsHost, createHostHttpClient } from "./host";

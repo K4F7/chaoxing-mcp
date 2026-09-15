@@ -6,7 +6,7 @@ import {
   type ChaoxingHttpResponse,
   type CookieSessionPort,
   type NativeCookieJar,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 
 export type NativeHttpModule = {
   send(request: {

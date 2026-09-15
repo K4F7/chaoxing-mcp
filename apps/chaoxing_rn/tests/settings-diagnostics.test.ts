@@ -5,12 +5,12 @@ import {
   MemoryAlarmBackend,
   MemoryAlarmRuntime,
   ReminderAlarmScheduler,
-} from "@chaoxinghelper/android-alarms";
+} from "@chaoxing-mcp/android-alarms";
 import {
   buildAppSyncResponse,
   emptySyncStats,
   type LocalSyncRunner,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 
 import { CookieVault } from "../src/auth/cookie-vault";
 import { MemorySecureStore } from "../src/auth/secure-store";

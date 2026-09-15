@@ -13,7 +13,7 @@ import {
   type CourseCatalog,
   type LocalSyncRunner,
   type ReminderHistory,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 
 import { AutostartService } from "./autostart";
 import { parseLaunchArguments } from "./launch";

@@ -5,11 +5,11 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 final trustedLatestReleaseApi = Uri.https(
   'api.github.com',
-  '/repos/K4F7/chaoxinghelper/releases/latest',
+  '/repos/K4F7/chaoxing-mcp/releases/latest',
 );
 final trustedReleasesPage = Uri.https(
   'github.com',
-  '/K4F7/chaoxinghelper/releases',
+  '/K4F7/chaoxing-mcp/releases',
 );
 
 typedef CurrentBuildLoader = Future<int> Function();

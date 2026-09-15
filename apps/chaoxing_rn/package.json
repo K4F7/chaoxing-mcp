@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
-    "@chaoxinghelper/android-alarms": "file:../../packages/chaoxing-android-alarms",
-    "@chaoxinghelper/android-http": "file:../../packages/chaoxing-android-http",
-    "@chaoxinghelper/domain": "file:../../packages/chaoxing-domain",
+    "@chaoxing-mcp/android-alarms": "file:../../packages/chaoxing-android-alarms",
+    "@chaoxing-mcp/android-http": "file:../../packages/chaoxing-android-http",
+    "@chaoxing-mcp/domain": "file:../../packages/chaoxing-domain",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-cookies/cookies": "^6.2.1",
     "expo": "~57.0.15",

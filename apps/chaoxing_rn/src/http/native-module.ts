@@ -1,4 +1,4 @@
-import { type NativeHttpModule } from "@chaoxinghelper/android-http";
+import { type NativeHttpModule } from "@chaoxing-mcp/android-http";
 
 type ExpoModules = {
   requireNativeModule?: (name: string) => NativeHttpModule;

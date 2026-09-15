@@ -1,4 +1,4 @@
-import { isTrustedChaoxingUrl } from "@chaoxinghelper/domain";
+import { isTrustedChaoxingUrl } from "@chaoxing-mcp/domain";
 
 export const CHAOXING_LOGIN_URL =
   "https://passport2.chaoxing.com/login?fid=&refer=https%3A%2F%2Fi.chaoxing.com";

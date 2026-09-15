@@ -5,7 +5,7 @@ import {
   MemoryAlarmBackend,
   MemoryAlarmRuntime,
   ReminderAlarmScheduler,
-} from "@chaoxinghelper/android-alarms";
+} from "@chaoxing-mcp/android-alarms";
 import {
   AuthenticationExpiredException,
   buildAppSyncResponse,
@@ -15,7 +15,7 @@ import {
   type AppSyncResponse,
   type LocalSyncRunner,
   type SyncItem,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 
 import { CookieVault } from "../src/auth/cookie-vault";
 import { MemorySecureStore } from "../src/auth/secure-store";

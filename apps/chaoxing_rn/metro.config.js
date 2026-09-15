@@ -14,9 +14,9 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, "node_modules"),
 ];
 config.resolver.extraNodeModules = {
-  "@chaoxinghelper/domain": domainRoot,
-  "@chaoxinghelper/android-alarms": alarmsRoot,
-  "@chaoxinghelper/android-http": httpRoot,
+  "@chaoxing-mcp/domain": domainRoot,
+  "@chaoxing-mcp/android-alarms": alarmsRoot,
+  "@chaoxing-mcp/android-http": httpRoot,
 };
 
 module.exports = config;

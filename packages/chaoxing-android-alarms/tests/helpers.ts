@@ -2,7 +2,7 @@ import {
   SyncItemKind,
   type PlannedReminder,
   type SyncItem,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 
 export function assignmentItem(input: {
   dueAt: Date | null;

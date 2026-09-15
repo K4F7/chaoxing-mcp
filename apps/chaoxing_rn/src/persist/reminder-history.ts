@@ -1,7 +1,7 @@
 import {
   emptyReminderHistory,
   type ReminderHistory,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 
 export function reminderHistoryFromJson(value: unknown): ReminderHistory {
   if (value === null || typeof value !== "object") {

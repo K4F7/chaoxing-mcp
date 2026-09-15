@@ -1,12 +1,12 @@
 # AGENTS.md
 
-Agent-facing conventions for `chaoxinghelper`.
+Agent-facing conventions for `chaoxing-mcp`.
 
 ## Agent skills
 
 ### Issue tracker
 
-Issues live as GitHub issues in `K4F7/chaoxinghelper`, managed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues live as GitHub issues in `K4F7/chaoxing-mcp`, managed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
