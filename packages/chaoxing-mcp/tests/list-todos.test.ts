@@ -366,22 +366,45 @@ describe("listTodos 认证失效", () => {
     assert.equal(result.isError, true);
   });
 
-  test("still returns auth_expired after openLogin writes a cookie, without listing 待办事项", async () => {
+  test("after openLogin writes a cookie, a failing auth probe returns a structured error instead of throwing", async () => {
     const fake = createPorts({
       async onOpenLogin(store) {
-        store.cookie = "UID=1; vc3=abc";
+        store.cookie = VALID_COOKIE;
       },
     });
 
     const result = await listTodos("current_semester", fake.ports);
 
-    assert.equal(fake.store.cookie, "UID=1; vc3=abc");
-    assert.equal(fake.openLoginCallCount(), 1);
-    assert.equal(result.status, "auth_expired");
     assert.equal(result.isError, true);
-    assert.deepEqual(result.todos, []);
     assert.notEqual(result.status, "ok");
-    assert.equal(fake.httpCallCount(), 0);
+    assert.deepEqual(result.todos, []);
+    assert.equal(result.errors.length > 0, true);
+    assert.equal(
+      result.errors.some((error) => error.where === "credentials"),
+      true,
+    );
+  });
+
+  test("continues the query in the same call after openLogin writes a cookie", async () => {
+    const fake = createPorts({
+      httpByUrl: fixtureAResponses(),
+      async onOpenLogin(store) {
+        store.cookie = VALID_COOKIE;
+      },
+    });
+
+    const result = await listTodos("current_semester", fake.ports);
+
+    assert.equal(fake.store.cookie, VALID_COOKIE);
+    assert.equal(fake.openLoginCallCount(), 1);
+    assert.notEqual(result.status, "auth_expired");
+    assert.equal(result.status, "ok");
+    assert.equal(result.isError, false);
+    assert.deepEqual(
+      result.todos.map((todo) => todo.title),
+      ["新课作业", "新课打回"],
+    );
+    assert.equal(fake.httpCallCount() > 0, true);
   });
 });
 
@@ -441,7 +464,39 @@ describe("listTodos existing cookie", () => {
     assert.equal(result.isError, true);
     assert.deepEqual(result.todos, []);
   });
+
+  test("continues the query after openLogin replaces a stale cookie that landed on a login page", async () => {
+    const responses = {
+      ...fixtureAResponses(),
+      [AUTH_PROBE_URL]: {
+        statusCode: 200,
+        url: "https://passport2.chaoxing.com/login?fid=1",
+        body: '<title>用户登录</title><button id="loginBtn">登录</button>',
+      },
+    };
+    const fake = createPorts({
+      cookie: "UID=stale; vc3=old",
+      httpByUrl: responses,
+      async onOpenLogin(store) {
+        store.cookie = VALID_COOKIE;
+        responses[AUTH_PROBE_URL] = AUTH_OK;
+      },
+    });
+
+    const result = await listTodos("current_semester", fake.ports);
+
+    assert.equal(fake.openLoginCallCount(), 1);
+    assert.equal(fake.store.cookie, VALID_COOKIE);
+    assert.notEqual(result.status, "auth_expired");
+    assert.equal(result.status, "ok");
+    assert.equal(result.isError, false);
+    assert.deepEqual(
+      result.todos.map((todo) => todo.title),
+      ["新课作业", "新课打回"],
+    );
+  });
 });
+
 
 describe("listTodos login wait", () => {
   test("returns auth_expired when openLogin times out waiting for login", async () => {
@@ -457,6 +512,53 @@ describe("listTodos login wait", () => {
     assert.equal(result.status, "auth_expired");
     assert.equal(result.isError, true);
     assert.notEqual(result.status, "ok");
+    assert.deepEqual(result.todos, []);
+    assert.equal(
+      result.errors.some((error) => error.message.includes("login wait timeout")),
+      true,
+    );
+  });
+
+  test("returns auth_expired with the thrown message when openLogin cannot launch Chrome", async () => {
+    const fake = createPorts({
+      async onOpenLogin() {
+        throw new Error(
+          "Chrome is not installed. Interactive 学习通 login needs Google Chrome.",
+        );
+      },
+    });
+
+    const result = await listTodos("current_semester", fake.ports);
+
+    assert.equal(result.status, "auth_expired");
+    assert.equal(result.isError, true);
+    assert.deepEqual(result.todos, []);
+    assert.notEqual(result.status, "ok");
+    assert.equal(
+      result.errors.some((error) =>
+        error.message.includes("Chrome is not installed"),
+      ),
+      true,
+    );
+  });
+
+  test("keychain write failure is auth_expired, not ok with empty 待办事项", async () => {
+    const fake = createPorts({
+      async onOpenLogin() {
+        throw new Error("Failed to write 学习通 cookie to keychain");
+      },
+    });
+
+    const result = await listTodos("current_semester", fake.ports);
+
+    assert.equal(result.status, "auth_expired");
+    assert.equal(result.isError, true);
+    assert.notEqual(result.status, "ok");
+    assert.deepEqual(result.todos, []);
+    assert.equal(
+      result.errors.some((error) => error.message.includes("keychain")),
+      true,
+    );
   });
 });
 

@@ -102,18 +102,90 @@ function resolveScope(scope: string | undefined): TodoScope | null {
   return null;
 }
 
-async function openLoginAndExpire(
+function authExpiredResult(
+  scope: TodoScope,
+  message = "认证失效",
+): ListTodosResult {
+  return unscannedResult("auth_expired", scope, [
+    { where: "credentials", message },
+  ]);
+}
+
+function isUsableCookie(cookie: string | null): cookie is string {
+  return cookie != null && cookie.trim() !== "";
+}
+
+function thrownLoginMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : "认证失效";
+}
+
+async function cookieAfterOpenLogin(
   ports: ListTodosPorts,
   scope: TodoScope,
-): Promise<ListTodosResult> {
+): Promise<string | ListTodosResult> {
   try {
     await ports.openLogin.openLogin();
-  } catch {
-    // Login wait timeout (or other login failure) is still 认证失效.
+  } catch (error) {
+    return authExpiredResult(scope, thrownLoginMessage(error));
   }
-  return unscannedResult("auth_expired", scope, [
-    { where: "credentials", message: "认证失效" },
-  ]);
+  const cookie = await ports.credentials.getCookie();
+  if (!isUsableCookie(cookie)) {
+    return authExpiredResult(scope);
+  }
+  return cookie;
+}
+
+async function probeAuth(
+  ports: ListTodosPorts,
+  cookie: string,
+  scope: TodoScope,
+): Promise<"ok" | "login_page" | ListTodosResult> {
+  try {
+    const response = await ports.http.request({
+      url: AUTH_PROBE_URL,
+      cookie,
+    });
+    if (looksLikeLoginPage(response.url, response.body)) {
+      return "login_page";
+    }
+    return "ok";
+  } catch (error) {
+    return unscannedResult("incomplete", scope, [
+      { where: "credentials", message: thrownLoginMessage(error) },
+    ]);
+  }
+}
+
+async function resolveAuthenticatedCookie(
+  ports: ListTodosPorts,
+  scope: TodoScope,
+): Promise<string | ListTodosResult> {
+  const existing = await ports.credentials.getCookie();
+  if (isUsableCookie(existing)) {
+    const probed = await probeAuth(ports, existing, scope);
+    if (probed === "ok") {
+      return existing;
+    }
+    if (probed !== "login_page") {
+      return probed;
+    }
+  }
+
+  const afterLogin = await cookieAfterOpenLogin(ports, scope);
+  if (typeof afterLogin !== "string") {
+    return afterLogin;
+  }
+
+  const probed = await probeAuth(ports, afterLogin, scope);
+  if (probed === "login_page") {
+    return authExpiredResult(scope);
+  }
+  if (probed !== "ok") {
+    return probed;
+  }
+  return afterLogin;
 }
 
 export async function listTodos(
@@ -127,15 +199,11 @@ export async function listTodos(
     ]);
   }
 
-  const cookie = await ports.credentials.getCookie();
-  if (cookie == null || cookie.trim() === "") {
-    return openLoginAndExpire(ports, resolved);
+  const cookieOrExpired = await resolveAuthenticatedCookie(ports, resolved);
+  if (typeof cookieOrExpired !== "string") {
+    return cookieOrExpired;
   }
-
-  const response = await ports.http.request({ url: AUTH_PROBE_URL, cookie });
-  if (looksLikeLoginPage(response.url, response.body)) {
-    return openLoginAndExpire(ports, resolved);
-  }
+  const cookie = cookieOrExpired;
 
   let coursesResponse: Awaited<ReturnType<ChaoxingHttp["request"]>> | undefined;
   try {

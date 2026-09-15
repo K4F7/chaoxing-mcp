@@ -31,11 +31,10 @@ export function createKeychainCredentialStore(): WritableCredentialStore {
       try {
         await entry.setPassword(cookie);
       } catch (error) {
-        console.error(
-          "Failed to write 学习通 cookie to keychain:",
-          error instanceof Error ? error.message : String(error),
-        );
-        throw error;
+        const detail = error instanceof Error ? error.message : String(error);
+        const message = `Failed to write 学习通 cookie to keychain: ${detail}`;
+        console.error(message);
+        throw new Error(message, { cause: error });
       }
     },
   };
