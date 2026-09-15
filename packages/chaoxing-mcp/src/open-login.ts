@@ -6,6 +6,23 @@ import { chromium, type BrowserContext, type Cookie, type Page } from "playwrigh
 import type { WritableCredentialStore } from "./credentials";
 import type { OpenLogin } from "./list-todos";
 import { AUTH_PROBE_URL, looksLikeLoginPage } from "./login-page";
+import {
+  createFallbackPasswordLogin,
+  createHttpPasswordLogin,
+  envPasswordCredentialSource,
+  redactLoginSecrets,
+  type LoginFetch,
+  type PasswordCredentials,
+  type PasswordCredentialSource,
+  type PasswordLoginRunner,
+} from "./password-login";
+
+export type {
+  PasswordCredentials,
+  PasswordCredentialSource,
+  PasswordLoginRunner,
+};
+export { envPasswordCredentialSource };
 
 const CHAOXING_LOGIN_URL =
   "https://passport2.chaoxing.com/login?fid=&refer=https%3A%2F%2Fi.chaoxing.com";
@@ -22,34 +39,6 @@ const NO_DISPLAY_MESSAGE =
 
 const PASSWORD_LOGIN_FAILED_PREFIX =
   "Password login (账密直登) failed";
-
-export type PasswordCredentials = {
-  username: string;
-  password: string;
-};
-
-export type PasswordCredentialSource = {
-  getPasswordCredentials(): Promise<PasswordCredentials | null>;
-};
-
-export type PasswordLoginRunner = {
-  loginWithPassword(credentials: PasswordCredentials): Promise<void>;
-};
-
-export function envPasswordCredentialSource(
-  env: NodeJS.ProcessEnv = process.env,
-): PasswordCredentialSource {
-  return {
-    async getPasswordCredentials() {
-      const username = env.CHAOXING_USERNAME?.trim() ?? "";
-      const password = env.CHAOXING_PASSWORD ?? "";
-      if (username.length === 0 || password.length === 0) {
-        return null;
-      }
-      return { username, password };
-    },
-  };
-}
 
 export function cannotOpenLoginUiMessage(
   env: NodeJS.ProcessEnv = process.env,
@@ -86,6 +75,13 @@ export function describeLoginFailure(error: unknown): string {
   return text.length > 0 ? text : "认证失效";
 }
 
+export function passwordLoginHeadless(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  return cannotOpenLoginUiMessage(env, platform) != null;
+}
+
 export function createPassportOpenLogin(
   credentials: WritableCredentialStore,
   options: {
@@ -94,6 +90,7 @@ export function createPassportOpenLogin(
     platform?: NodeJS.Platform;
     passwordCredentials?: PasswordCredentialSource;
     passwordLogin?: PasswordLoginRunner;
+    fetchImpl?: LoginFetch;
   } = {},
 ): OpenLogin {
   const timeoutMs = options.timeoutMs ?? LOGIN_TIMEOUT_MS;
@@ -103,20 +100,24 @@ export function createPassportOpenLogin(
     options.passwordCredentials ?? envPasswordCredentialSource(env);
   const passwordLogin =
     options.passwordLogin ??
-    createPlaywrightPasswordLogin(credentials, { env, platform });
+    createFallbackPasswordLogin(
+      createHttpPasswordLogin(credentials, { fetchImpl: options.fetchImpl }),
+      createPlaywrightPasswordLogin(credentials, { env, platform }),
+    );
 
   return {
     async openLogin() {
       const passwordCreds = await passwordCredentials.getPasswordCredentials();
       if (passwordCreds != null) {
         try {
-          console.error(
-            "Trying 学习通 password login (账密直登) via Playwright",
-          );
+          console.error("Trying 学习通 password login (账密直登)");
           await passwordLogin.loginWithPassword(passwordCreds);
           return;
         } catch (error) {
-          const detail = describeLoginFailure(error);
+          const detail = redactLoginSecrets(
+            describeLoginFailure(error),
+            passwordCreds,
+          );
           const blocked = cannotOpenLoginUiMessage(env, platform);
           if (blocked != null) {
             const message = `${PASSWORD_LOGIN_FAILED_PREFIX}: ${detail}. Interactive fallback unavailable: ${blocked}`;
@@ -160,7 +161,7 @@ export function createPassportOpenLogin(
   };
 }
 
-function createPlaywrightPasswordLogin(
+export function createPlaywrightPasswordLogin(
   credentials: WritableCredentialStore,
   options: {
     env: NodeJS.ProcessEnv;
@@ -169,18 +170,14 @@ function createPlaywrightPasswordLogin(
 ): PasswordLoginRunner {
   return {
     async loginWithPassword(passwordCreds) {
-      const blocked = cannotOpenLoginUiMessage(options.env, options.platform);
-      // Password fill still needs a headed Chrome on Linux (captcha / risk controls).
-      if (blocked != null) {
-        throw new Error(blocked);
-      }
+      const headless = passwordLoginHeadless(options.env, options.platform);
       let context: BrowserContext | undefined;
       try {
         context = await chromium.launchPersistentContext(
           join(homedir(), ".chaoxinghelper", "chrome-profile"),
           {
             channel: "chrome",
-            headless: false,
+            headless,
             viewport: { width: 1280, height: 860 },
           },
         );

@@ -29,7 +29,7 @@ args = ["start", "--silent", "--prefix", "packages/chaoxing-mcp"]
 startup_timeout_sec = 60
 ```
 
-工具只有 `list_todos`。凭据在本机钥匙串（service `chaoxinghelper.mcp` / account `cookie`），由 Playwright 写入；**系统 Chrome 已登录 ≠ MCP 已登录**。可选环境变量 `CHAOXING_USERNAME` / `CHAOXING_PASSWORD` 做账密直登（勿写入仓库）。无头 / 无 Chrome / 无显示且无可用 cookie 时返回 `auth_expired`（不是「没有作业」）。
+工具只有 `list_todos`。凭据在本机钥匙串（service `chaoxinghelper.mcp` / account `cookie`）；**系统 Chrome 已登录 ≠ MCP 已登录**。登录对齐 PU 的 CLI：`cd packages/chaoxing-mcp && npm run login --silent -- -u …`（密码用 env `CHAOXING_PASSWORD` 或隐藏提示；勿写入仓库）。先 HTTP `fanyalogin`，失败再 Playwright；可能仍要验证码。无头 / 无 Chrome / 无显示且无可用 cookie 时返回 `auth_expired`（不是「没有作业」）。MCP 工具不收密码。
 
 ## 验证
 

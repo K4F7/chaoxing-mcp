@@ -127,4 +127,26 @@ describe("MCP grok config", () => {
     assert.match(credentials, /SERVICE = "chaoxinghelper\.mcp"/);
     assert.match(openLogin, /"\.chaoxinghelper", "chrome-profile"/);
   });
+
+  test("exposes npm run login and never takes passwords in MCP tools", () => {
+    const pkg = JSON.parse(
+      readFileSync(join(repoRoot, "packages/chaoxing-mcp/package.json"), "utf8"),
+    ) as { scripts: Record<string, string> };
+    assert.equal(pkg.scripts.login, "node --import tsx src/login-cli.ts");
+
+    const server = readFileSync(
+      join(repoRoot, "packages/chaoxing-mcp/src/server.ts"),
+      "utf8",
+    );
+    assert.match(server, /list_todos/);
+    assert.doesNotMatch(server, /CHAOXING_PASSWORD/);
+    assert.doesNotMatch(server, /username:\s*z\./);
+    assert.doesNotMatch(server, /password:\s*z\./);
+
+    const docs = readFileSync(join(repoRoot, "docs/mcp.md"), "utf8");
+    const readme = readFileSync(join(repoRoot, "README.md"), "utf8");
+    assert.match(docs, /npm run login --silent/);
+    assert.match(readme, /npm run login --silent/);
+    assert.doesNotMatch(docs, /npm run login -- -u .* -p /);
+  });
 });

@@ -10,6 +10,7 @@
   },
   "scripts": {
     "start": "node --import tsx src/stdio.ts",
+    "login": "node --import tsx src/login-cli.ts",
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },

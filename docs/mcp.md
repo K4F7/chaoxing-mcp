@@ -4,6 +4,24 @@
 
 工具只有 `list_todos`。Cookie 存在本机钥匙串（`@napi-rs/keyring`），不出现在工具入参或返回值里。
 
+## 与 PU 的差异
+
+| | PU | 学习通 MCP |
+| --- | --- | --- |
+| 会话 | 钥匙串里的 **token** | 钥匙串里的 **cookie**（service `chaoxinghelper.mcp` / account `cookie`） |
+| 登录 CLI | `pu login -u/-p`，env `PU_USERNAME` / `PU_PASSWORD` | `npm run login --silent`（在 `packages/chaoxing-mcp`），env `CHAOXING_USERNAME` / `CHAOXING_PASSWORD` |
+| 协议 | 稳定 HTTP JSON：`/uc/user/login` 明文账密 + sid → token | 先 POST `https://passport2.chaoxing.com/fanyalogin`（官方页同款 AES 混淆）；失败再 Playwright 填 passport |
+| 验证码 / 风控 | 检测到验证码/风控即停，不求解 | 可能要 CXCaptcha、双因子或风控页；**不实现验证码求解**，失败信息说清楚 |
+| MCP | 工具不收密码 | 工具不收密码，也不返回 cookie |
+
+CLI 成功只打印 `LOGIN_OK has_cookie=true`，不打印 cookie 或密码。缺账号密码时 **仅 CLI** 可提示输入；MCP 从不提示、也不接收凭据。
+
+### 调研结论（passport HTTP，只 GET 过公开登录页）
+
+公开页 `GET https://passport2.chaoxing.com/login`（无凭据）不是 PU 那种可填表单 action：`<form action="">`，提交由 `login.js` 的 `POST /fanyalogin` 完成。字段包括 `fid`（页上默认 `-1`）、AES-CBC 混淆后的 `uname`/`password`（密钥写在公开 JS 里，是混淆不是密钥托管）、可空的 `validate`。页上有 CXCaptcha（`captcha.chaoxing.com`，点击/图文）；`needVcode` 为空时常见路径可以不弹验证码。另有短信码 `/fanyaloginbycode`、双因子跳转、以及社区里常见的风控 HTML（「暂时不能访问」）。
+
+**结论：常见无验证码情况下 HTTP 直登可行**（因此 CLI / `openLogin` 先走 fanyalogin，成功则写钥匙串）。这仍不像 PU：必须客户端 AES、可能 captcha/2FA/风控，失败要清晰，并回退已有 Playwright 填表。无 `DISPLAY` 时 Playwright 用 `headless: true`，有显示时用有界面；两条都失败则报错。不实现验证码求解，测试不向学习通 POST 真实密码。
+
 ## 安装
 
 在仓库根目录：
@@ -57,7 +75,7 @@ MCP 凭据只走本机钥匙串：
 | service | `chaoxinghelper.mcp` |
 | account | `cookie` |
 
-必须由 `createPassportOpenLogin` 写入。它用 Playwright 持久化目录 `~/.chaoxinghelper/chrome-profile`，`channel: "chrome"`（本机 Google Chrome，有界面）。
+必须由登录 CLI 或 `createPassportOpenLogin` 写入。HTTP 直登成功时不弹窗；否则用 Playwright 持久化目录 `~/.chaoxinghelper/chrome-profile`，`channel: "chrome"`（本机 Google Chrome）。无显示时走 headless，有 `DISPLAY` 时有界面。
 
 ### Linux / Grok Bot
 
@@ -71,26 +89,32 @@ MCP 凭据只走本机钥匙串：
 
 登录成功并把 cookie 写入钥匙串后，**同一次** `list_todos` 会继续查待办，不必为「刚登录」再调一次。
 
-### 账密直登（非交互优先）
+### 账密直登（CLI 优先，对齐 `pu login`）
 
-若环境里已有账号密码，MCP 会先尝试 Playwright 自动填 passport 登录，再写入同一把钥匙串：
+在 `packages/chaoxing-mcp`：
 
-| 环境变量 | 含义 |
+```sh
+npm run login --silent -- -u <账号>
+# 密码用 CHAOXING_PASSWORD 或 CLI 隐藏提示。
+# --silent 避免 npm 把命令行（含 -p）印到 stdout。
+# 等价：node --import tsx src/login-cli.ts -u <账号>
+```
+
+| 来源 | 含义 |
 | --- | --- |
-| `CHAOXING_USERNAME` | 学习通账号（手机号/学号等） |
-| `CHAOXING_PASSWORD` | 学习通密码 |
+| `-u` / `--username`，或 `CHAOXING_USERNAME` | 学习通账号（手机号/学号等） |
+| `CHAOXING_PASSWORD`，隐藏提示，或 `-p` / `--password` | 学习通密码。优先 env / 提示；`-p` 可用，但不要让 npm 横幅把它打出来 |
 
-只在进程环境或本机安全输入里配置这些变量；**不要写进 git、PR、MCP 配置或工具参数**。日志不会打印账号或密码的值。
+只在进程环境、CLI 参数或本机安全输入里配置；**不要写进 git、PR、MCP 配置或工具参数**。日志和成功输出不会打印账号、密码或 cookie 的值。
 
 行为：
 
-1. 有 `CHAOXING_USERNAME` + `CHAOXING_PASSWORD` → 先账密直登
-2. 直登失败且有 `DISPLAY` → 回退交互登录窗
-3. 直登失败且无 `DISPLAY` → `auth_expired`，错误信息说明直登失败且无法弹窗
+1. CLI / MCP 有账密 → 先 HTTP `fanyalogin`（URL 信任分级）
+2. HTTP 失败（验证码、风控、错误口令等）→ Playwright 填 passport（无 `DISPLAY` 时 `headless: true`，有显示时有界面）
+3. 仍失败且 MCP 有 `DISPLAY` → 回退交互登录窗
+4. 仍失败且无 `DISPLAY` → `auth_expired`（MCP）或 CLI 非零退出，错误说明直登失败且无法弹窗
 
-账密直登在 Linux 上仍需要可见 Chrome（验证码/风控）；不是无头 API 登录。
-
-可选 fallback：先在有桌面的机器登录一次写入钥匙串；之后同一钥匙串在无头环境可读时，查询可不再弹窗。
+可选：先在有桌面的机器登录一次写入钥匙串；之后同一钥匙串在无头环境可读时，查询可不再弹窗。
 
 ## `list_todos`
 
