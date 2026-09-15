@@ -10,6 +10,8 @@ export type ParsedCourseTodo = {
   title: string;
   due_at: string | null;
   closed: boolean;
+  remaining_text: string | null;
+  entry_url: string | null;
 };
 
 export type ParsedInboxNotice = {
@@ -78,6 +80,7 @@ export function parseEnrolledCourses(body: string): EnrolledCourse[] {
 export function parseCourseSpaceTodos(
   html: string,
   course: EnrolledCourse,
+  now: Date = new Date(),
 ): ParsedCourseTodo[] {
   const todos: ParsedCourseTodo[] = [];
   const itemPattern = /<li\b([^>]*)>([\s\S]*?)<\/li>/gi;
@@ -92,9 +95,6 @@ export function parseCourseSpaceTodos(
       decodeEntities(
         inner.match(/<p\b[^>]*>([^<]*)/i)?.[1]?.trim() ?? "",
       ) || course.title;
-    const dueMatch = text.match(
-      /截止时间[:：]\s*(\d{4}-\d{1,2}-\d{1,2}\s+\d{1,2}:\d{2})/,
-    );
     const rawUrl = decodeEntities(attrs.data ?? attrs.href ?? "");
     todos.push({
       id:
@@ -102,8 +102,10 @@ export function parseCourseSpaceTodos(
         readQueryParam(rawUrl, "workId") ??
         title,
       title,
-      due_at: toDueAt(dueMatch?.[1] ?? null),
+      due_at: parseAbsoluteDueAt(text, now),
       closed: CLOSED_STATUS.test(text),
+      remaining_text: extractRemainingText(text),
+      entry_url: rawUrl.length > 0 ? rawUrl : null,
     });
   }
   return todos;
@@ -250,6 +252,150 @@ function toDueAt(value: string | null): string | null {
   if (match == null) {
     return null;
   }
+  return formatDueAt(
+    match[1],
+    match[2],
+    match[3],
+    match[4],
+    match[5],
+    "00",
+  );
+}
+
+export function parseWorkDetailDueAt(html: string, now: Date): string | null {
+  const aria = html.match(
+    /aria-label=["']截止时间(\d{1,2})月(\d{1,2})日(\d{1,2})时(\d{1,2})分(?:(\d{1,2})秒)?["']/,
+  );
+  if (aria != null) {
+    return dueAtWithoutYear(
+      aria[1],
+      aria[2],
+      aria[3],
+      aria[4],
+      aria[5] ?? "00",
+      now,
+    );
+  }
+  const text = stripTags(html);
+  return parseAbsoluteDueAt(text, now);
+}
+
+function parseAbsoluteDueAt(text: string, now: Date): string | null {
+  const withYear = text.match(
+    /截止时间[:：]\s*(\d{4})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/,
+  );
+  if (withYear != null) {
+    return formatDueAt(
+      withYear[1],
+      withYear[2],
+      withYear[3],
+      withYear[4],
+      withYear[5],
+      withYear[6] ?? "00",
+    );
+  }
+  const withoutYear = text.match(
+    /截止时间[:：]\s*(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/,
+  );
+  if (withoutYear == null) {
+    return null;
+  }
+  return dueAtWithoutYear(
+    withoutYear[1],
+    withoutYear[2],
+    withoutYear[3],
+    withoutYear[4],
+    withoutYear[5] ?? "00",
+    now,
+  );
+}
+
+function dueAtWithoutYear(
+  month: string,
+  day: string,
+  hour: string,
+  minute: string,
+  second: string,
+  now: Date,
+): string {
+  const year = yearNotBeforeNow(
+    Number.parseInt(month, 10),
+    Number.parseInt(day, 10),
+    Number.parseInt(hour, 10),
+    Number.parseInt(minute, 10),
+    Number.parseInt(second, 10),
+    now,
+  );
+  return formatDueAt(String(year), month, day, hour, minute, second);
+}
+
+function formatDueAt(
+  year: string,
+  month: string,
+  day: string,
+  hour: string,
+  minute: string,
+  second: string,
+): string {
   const pad = (part: string): string => part.padStart(2, "0");
-  return `${match[1]}-${pad(match[2])}-${pad(match[3])}T${pad(match[4])}:${pad(match[5])}:00+08:00`;
+  return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:${pad(second)}+08:00`;
+}
+
+function yearNotBeforeNow(
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  second: number,
+  now: Date,
+): number {
+  const nowInPlus8 = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  const year = nowInPlus8.getUTCFullYear();
+  const candidate = Date.parse(
+    formatDueAt(
+      String(year),
+      String(month),
+      String(day),
+      String(hour),
+      String(minute),
+      String(second),
+    ),
+  );
+  return candidate >= now.getTime() ? year : year + 1;
+}
+
+const REMAINING_PATTERN =
+  /剩余(?:(\d+)\s*天)?(?:(\d+)\s*小时)?(?:(\d+)\s*分钟)?/;
+
+export function dueAtFromRemaining(text: string, now: Date): string | null {
+  const match = text.match(REMAINING_PATTERN);
+  if (match == null) {
+    return null;
+  }
+  const days = match[1] == null ? 0 : Number.parseInt(match[1], 10);
+  const hours = match[2] == null ? 0 : Number.parseInt(match[2], 10);
+  const minutes = match[3] == null ? 0 : Number.parseInt(match[3], 10);
+  if (days === 0 && hours === 0 && minutes === 0) {
+    return null;
+  }
+  const due = new Date(
+    now.getTime() +
+      days * 24 * 60 * 60 * 1000 +
+      hours * 60 * 60 * 1000 +
+      minutes * 60 * 1000,
+  );
+  return toIsoPlus8(due);
+}
+
+function extractRemainingText(text: string): string | null {
+  const match = text.match(REMAINING_PATTERN);
+  if (match == null || (match[1] == null && match[2] == null && match[3] == null)) {
+    return null;
+  }
+  return match[0];
+}
+
+function toIsoPlus8(value: Date): string {
+  const shifted = new Date(value.getTime() + 8 * 60 * 60 * 1000);
+  return `${shifted.toISOString().slice(0, 19)}+08:00`;
 }
