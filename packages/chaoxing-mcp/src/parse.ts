@@ -399,3 +399,67 @@ function toIsoPlus8(value: Date): string {
   const shifted = new Date(value.getTime() + 8 * 60 * 60 * 1000);
   return `${shifted.toISOString().slice(0, 19)}+08:00`;
 }
+
+const MAX_SUMMARY_CHARS = 1500;
+const DO_HOMEWORK_URL =
+  /(?:https:\/\/[a-z0-9.-]+)?\/(?:mooc-ans\/)?work\/phone\/doHomeWork\?[^\s"'<>]*/gi;
+
+export type HomeworkPrompt = {
+  summary: string | null;
+  kind: string | null;
+};
+
+export function extractDoHomeworkUrls(html: string): string[] {
+  const normalized = html.replaceAll("\\/", "/");
+  const found: string[] = [];
+  const seen = new Set<string>();
+  for (const match of normalized.matchAll(DO_HOMEWORK_URL)) {
+    const raw = decodeEntities(match[0]).replace(/[.,;]+$/, "");
+    if (raw.length === 0 || seen.has(raw)) {
+      continue;
+    }
+    seen.add(raw);
+    found.push(raw);
+  }
+  return found;
+}
+
+export function parseHomeworkPrompt(html: string): HomeworkPrompt {
+  return {
+    summary: parseWorkWrapSummary(html),
+    kind: parseTitType(html),
+  };
+}
+
+function parseTitType(html: string): string | null {
+  const match = html.match(
+    /<[^>]*\bclass=["'][^"']*\btitType\b[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i,
+  );
+  const text = stripTags(match?.[1] ?? "");
+  if (text.length === 0) {
+    return null;
+  }
+  const kind = text.replace(/^\d+\s*[.、．]\s*/, "");
+  return kind.length > 0 ? kind : text;
+}
+
+function parseWorkWrapSummary(html: string): string | null {
+  const open = html.match(
+    /<([a-zA-Z][\w:-]*)\b[^>]*\bclass=["'][^"']*\bworkWrap\b[^"']*["'][^>]*>/i,
+  );
+  if (open == null || open.index === undefined) {
+    return null;
+  }
+  const startInner = open.index + open[0].length;
+  const closeIndex = findMatchingClose(html, startInner, open[1]);
+  return truncateSummary(stripTags(html.slice(startInner, closeIndex)));
+}
+
+function truncateSummary(text: string): string | null {
+  if (text.length === 0) {
+    return null;
+  }
+  return text.length > MAX_SUMMARY_CHARS
+    ? text.slice(0, MAX_SUMMARY_CHARS)
+    : text;
+}
