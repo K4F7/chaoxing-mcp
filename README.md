@@ -20,7 +20,7 @@
 
 - Android：见 [`apps/chaoxing_rn/README.md`](./apps/chaoxing_rn/README.md)。需要开发构建（`npx expo run:android`）才能读 HttpOnly Cookie。
 - Windows：见 [`apps/chaoxing_windows/README.md`](./apps/chaoxing_windows/README.md)。C# 外壳与安装器在 Windows SDK 上构建。
-- MCP（Grok Bot / Cursor stdio）：见 [`docs/mcp.md`](./docs/mcp.md)。先 `cd packages/chaoxing-mcp && npm ci`，工作区用仓库根。`.grok/config.toml` 与 Cursor `AddMcpServer` 同一组参数：
+- MCP（Grok Bot / Cursor stdio）：见 [`docs/mcp.md`](./docs/mcp.md)（登录踩坑、账密直登、`list_todos` scope）。先 `cd packages/chaoxing-mcp && npm ci`，工作区用仓库根。`.grok/config.toml` 与 Cursor `AddMcpServer` 同一组参数：
 
 ```toml
 [mcp_servers.chaoxing]
@@ -29,7 +29,7 @@ args = ["start", "--silent", "--prefix", "packages/chaoxing-mcp"]
 startup_timeout_sec = 60
 ```
 
-工具只有 `list_todos`。凭据在本机钥匙串，不要当工具参数传入。无头 / 无 Chrome / 无显示时登录无法完成，会返回 `auth_expired`（不是「没有作业」）；可先在有桌面的机器登录写入钥匙串再查询。
+工具只有 `list_todos`。凭据在本机钥匙串（service `chaoxinghelper.mcp` / account `cookie`），由 Playwright 写入；**系统 Chrome 已登录 ≠ MCP 已登录**。可选环境变量 `CHAOXING_USERNAME` / `CHAOXING_PASSWORD` 做账密直登（勿写入仓库）。无头 / 无 Chrome / 无显示且无可用 cookie 时返回 `auth_expired`（不是「没有作业」）。
 
 ## 验证
 

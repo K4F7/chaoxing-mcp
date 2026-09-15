@@ -1,6 +1,9 @@
 export {
   listTodos,
   type ChaoxingHttp,
+  type ChaoxingHttpRequest,
+  type ChaoxingHttpResponse,
+  type ScannedCourseSummary,
   type CredentialStore,
   type ListTodosError,
   type ListTodosPorts,

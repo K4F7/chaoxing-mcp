@@ -43,8 +43,9 @@ export function currentSemesterOf(
 
 export function parseEnrolledCourses(body: string): EnrolledCourse[] {
   const courses: EnrolledCourse[] = [];
-  const itemPattern = /<li\b([^>]*)>([\s\S]*?)<\/li>/gi;
-  for (const match of body.matchAll(itemPattern)) {
+  const openTag = /<li\b([^>]*)>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = openTag.exec(body)) !== null) {
     const attrs = parseAttributes(match[1]);
     const classNames = (attrs.class ?? "").split(/\s+/).filter(Boolean);
     if (!classNames.includes("course")) {
@@ -53,17 +54,22 @@ export function parseEnrolledCourses(body: string): EnrolledCourse[] {
     const courseId = attrs.courseid?.trim() ?? "";
     const classId = attrs.clazzid?.trim() ?? "";
     const cpi = attrs.personid?.trim() ?? "";
-    if (courseId.length === 0 || classId.length === 0) {
+    // 教侧 junk often has clazzid=0 and/or empty course name.
+    if (courseId.length === 0 || classId.length === 0 || classId === "0") {
       continue;
     }
-    const titleMatch = match[2].match(
-      /class=["']course-name["'][^>]*>([^<]*)/i,
-    );
+    const startInner = match.index + match[0].length;
+    const closeIndex = findMatchingClose(body, startInner, "li");
+    const innerHtml = body.slice(startInner, closeIndex);
+    const title = extractCourseTitle(innerHtml);
+    if (title.length === 0) {
+      continue;
+    }
     courses.push({
       courseId,
       classId,
       cpi,
-      title: decodeEntities((titleMatch?.[1] ?? "").trim()),
+      title,
     });
   }
   return courses;
@@ -138,6 +144,55 @@ export function parseInboxNotices(html: string): ParsedInboxNotice[] {
     });
   }
   return notices;
+}
+
+function extractCourseTitle(innerHtml: string): string {
+  const titleAttrPatterns = [
+    /class=["'][^"']*\bcourse-name\b[^"']*["'][^>]*\btitle=["']([^"']*)["']/i,
+    /\btitle=["']([^"']*)["'][^>]*class=["'][^"']*\bcourse-name\b[^"']*["']/i,
+  ];
+  for (const pattern of titleAttrPatterns) {
+    const match = innerHtml.match(pattern);
+    const fromAttr = decodeEntities((match?.[1] ?? "").trim());
+    if (fromAttr.length > 0) {
+      return fromAttr;
+    }
+  }
+  const textMatch = innerHtml.match(
+    /class=["'][^"']*\bcourse-name\b[^"']*["'][^>]*>([^<]*)/i,
+  );
+  return decodeEntities((textMatch?.[1] ?? "").trim());
+}
+
+function findMatchingClose(html: string, start: number, tag: string): number {
+  const open = new RegExp(`<${tag}\\b[^>]*>`, "gi");
+  const close = new RegExp(`</${tag}\\s*>`, "gi");
+  let depth = 1;
+  let cursor = start;
+  while (depth > 0 && cursor < html.length) {
+    open.lastIndex = cursor;
+    close.lastIndex = cursor;
+    const nextOpen = open.exec(html);
+    const nextClose = close.exec(html);
+    if (nextClose === null) {
+      return html.length;
+    }
+    if (
+      nextOpen !== null &&
+      nextOpen.index < nextClose.index &&
+      !nextOpen[0].trimEnd().endsWith("/>")
+    ) {
+      depth += 1;
+      cursor = nextOpen.index + nextOpen[0].length;
+    } else {
+      depth -= 1;
+      if (depth === 0) {
+        return nextClose.index;
+      }
+      cursor = nextClose.index + nextClose[0].length;
+    }
+  }
+  return html.length;
 }
 
 function isAssignmentLike(text: string): boolean {

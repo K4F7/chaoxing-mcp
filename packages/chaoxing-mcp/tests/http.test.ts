@@ -124,3 +124,74 @@ describe("cookie-bearing Chaoxing HTTP adapter URL 信任分级", () => {
     );
   });
 });
+
+describe("cookie-bearing Chaoxing HTTP adapter POST / form", () => {
+  test("rejects an untrusted URL for POST without issuing fetch", async () => {
+    const { calls, fetchImpl } = recordingFetch(async () => {
+      return new Response("should not run", { status: 200 });
+    });
+    const http = createFetchChaoxingHttp(fetchImpl);
+
+    await assert.rejects(() =>
+      http.request({
+        url: UNTRUSTED_HTTPS,
+        cookie: COOKIE,
+        method: "POST",
+        form: { courseType: "1" },
+      }),
+    );
+    assert.deepEqual(
+      calls.map((call) => call.url),
+      [],
+    );
+  });
+
+  test("POSTs application/x-www-form-urlencoded body with cookie and extra headers", async () => {
+    const trusted =
+      "https://mooc1-1.chaoxing.com/mooc-ans/visit/courselistdata";
+    const { calls, fetchImpl } = recordingFetch(async () => {
+      return new Response("<ul id=\"courseList\"></ul>", { status: 200 });
+    });
+    const http = createFetchChaoxingHttp(fetchImpl);
+
+    const response = await http.request({
+      url: trusted,
+      cookie: COOKIE,
+      method: "POST",
+      form: {
+        courseType: "1",
+        courseFolderId: "0",
+        baseEducation: "0",
+        superstarClass: "",
+        courseFolderSize: "0",
+      },
+      headers: {
+        Origin: "https://mooc1-1.chaoxing.com",
+        Referer: "https://mooc1-1.chaoxing.com/visit/interaction",
+        "X-Requested-With": "XMLHttpRequest",
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]?.url, trusted);
+    assert.equal(calls[0]?.init?.method, "POST");
+    assert.equal(calls[0]?.init?.redirect, "manual");
+    const headers = new Headers(calls[0]?.init?.headers);
+    assert.equal(headers.get("cookie"), COOKIE);
+    assert.match(
+      headers.get("content-type") ?? "",
+      /application\/x-www-form-urlencoded/i,
+    );
+    assert.equal(headers.get("origin"), "https://mooc1-1.chaoxing.com");
+    assert.equal(
+      headers.get("referer"),
+      "https://mooc1-1.chaoxing.com/visit/interaction",
+    );
+    assert.equal(headers.get("x-requested-with"), "XMLHttpRequest");
+    assert.equal(
+      String(calls[0]?.init?.body),
+      "courseType=1&courseFolderId=0&baseEducation=0&superstarClass=&courseFolderSize=0",
+    );
+  });
+});

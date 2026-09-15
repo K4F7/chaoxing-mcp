@@ -1,4 +1,4 @@
-import type { ChaoxingHttp } from "./list-todos";
+import type { ChaoxingHttp, ChaoxingHttpRequest } from "./list-todos";
 
 const MAX_COOKIE_REDIRECTS = 10;
 
@@ -23,8 +23,8 @@ export function createFetchChaoxingHttp(
   fetchImpl: FetchLike = globalThis.fetch,
 ): ChaoxingHttp {
   return {
-    async request({ url, cookie }) {
-      let currentUrl = url;
+    async request(input) {
+      let currentUrl = input.url;
       for (let hop = 0; hop <= MAX_COOKIE_REDIRECTS; hop += 1) {
         if (!isTrustedChaoxingUrl(currentUrl)) {
           throw new Error(
@@ -33,10 +33,10 @@ export function createFetchChaoxingHttp(
               : "untrusted_redirect_target",
           );
         }
-        const response = await fetchImpl(currentUrl, {
-          headers: { cookie },
-          redirect: "manual",
-        });
+        const response = await fetchImpl(
+          currentUrl,
+          buildFetchInit(input, hop === 0 ? currentUrl : null),
+        );
         if (!isRedirectStatus(response.status)) {
           return {
             statusCode: response.status,
@@ -65,6 +65,51 @@ export function createFetchChaoxingHttp(
       throw new Error("too_many_cookie_redirects");
     },
   };
+}
+
+function buildFetchInit(
+  input: ChaoxingHttpRequest,
+  originalUrl: string | null,
+): RequestInit {
+  const method = (input.method ?? "GET").toUpperCase();
+  const headers = new Headers(input.headers);
+  headers.set("cookie", input.cookie);
+
+  // Only the first hop carries the form body (POST). Redirect follow-ups are GET-like
+  // unless the status is 307/308; we keep body only when still on the original URL.
+  const sendBody =
+    originalUrl != null &&
+    method === "POST" &&
+    input.form !== undefined;
+
+  if (sendBody) {
+    if (!headers.has("content-type")) {
+      headers.set(
+        "content-type",
+        "application/x-www-form-urlencoded; charset=UTF-8",
+      );
+    }
+    return {
+      method: "POST",
+      headers,
+      body: encodeForm(input.form ?? {}),
+      redirect: "manual",
+    };
+  }
+
+  return {
+    method: originalUrl == null ? "GET" : method,
+    headers,
+    redirect: "manual",
+  };
+}
+
+function encodeForm(form: Record<string, string>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(form)) {
+    params.append(key, value);
+  }
+  return params.toString();
 }
 
 function isRedirectStatus(status: number): boolean {
