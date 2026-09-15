@@ -5,12 +5,12 @@ import {
   type ChaoxingHttpRequest,
   type ChaoxingHttpResponse,
   type CookieSessionPort,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 import {
   createProductionHttpClient,
   type FetchLike as NativeFetchLike,
   type NativeHttpModule,
-} from "@chaoxinghelper/android-http";
+} from "@chaoxing-mcp/android-http";
 
 import { CHAOXING_USER_AGENT } from "../auth/homepage-probe";
 

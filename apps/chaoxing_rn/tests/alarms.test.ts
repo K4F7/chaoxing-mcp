@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { MemoryAlarmBackend } from "@chaoxinghelper/android-alarms";
-import { addHours } from "@chaoxinghelper/domain";
+import { MemoryAlarmBackend } from "@chaoxing-mcp/android-alarms";
+import { addHours } from "@chaoxing-mcp/domain";
 
 import {
   createFixtureAlarmScheduler,
@@ -95,7 +95,7 @@ describe("fixture 待办事项 alarm wiring", () => {
     const backend = new MemoryAlarmBackend();
     const scheduler = createFixtureAlarmScheduler(backend);
     const { sampleTodos } = await import("../src/preview");
-    const { emptyReminderHistory } = await import("@chaoxinghelper/domain");
+    const { emptyReminderHistory } = await import("@chaoxing-mcp/domain");
     const { registerLiveAlarms } = await import("../src/alarms");
 
     const result = await registerLiveAlarms(

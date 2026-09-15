@@ -12,7 +12,7 @@ const {
   withAndroidManifest,
 } = loadConfigPlugins();
 
-const PACKAGE_NAME = "@chaoxinghelper/android-alarms";
+const PACKAGE_NAME = "@chaoxing-mcp/android-alarms";
 const RECEIVER_FIRE = "com.chaoxinghelper.alarms.ChaoxingAlarmReceiver";
 const RECEIVER_BOOT = "com.chaoxinghelper.alarms.ChaoxingBootReceiver";
 

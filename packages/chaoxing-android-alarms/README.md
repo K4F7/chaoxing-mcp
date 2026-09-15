@@ -1,4 +1,4 @@
-# `@chaoxinghelper/android-alarms`
+# `@chaoxing-mcp/android-alarms`
 
 React Native port of [ADR-0001](../../docs/adr/0001-android-prescheduled-alarms.md): pre-scheduled Android alarms for the two reminder tiers, not background fetch.
 
@@ -21,7 +21,7 @@ Both tiers still use the install-granted `USE_EXACT_ALARM` permission. The user-
 import {
   ReminderAlarmScheduler,
   mapPlannedReminders,
-} from "@chaoxinghelper/android-alarms";
+} from "@chaoxing-mcp/android-alarms";
 
 const { accepted, skipped } = mapPlannedReminders(planReminders({ items, history, now }), { now });
 await scheduler.rescheduleAll(plans, { now });

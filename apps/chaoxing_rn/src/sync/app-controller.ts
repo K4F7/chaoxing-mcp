@@ -2,7 +2,7 @@ import {
   MemoryAlarmRuntime,
   ReminderAlarmScheduler,
   type AlarmRuntime,
-} from "@chaoxinghelper/android-alarms";
+} from "@chaoxing-mcp/android-alarms";
 import {
   AuthenticationExpiredException,
   chaoxingCookieSecrets,
@@ -22,7 +22,7 @@ import {
   type ReminderHistory,
   type SyncItem,
   type SyncProgress,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 
 import { SessionController } from "../auth/session-controller";
 import {

@@ -4,7 +4,7 @@ import {
   type AlarmBackend,
   type AlarmRuntime,
   type NativeAlarmModule,
-} from "@chaoxinghelper/android-alarms";
+} from "@chaoxing-mcp/android-alarms";
 import { requireOptionalNativeModule } from "expo-modules-core";
 
 export function loadNativeAlarmModule(): NativeAlarmModule | null {

@@ -1,4 +1,4 @@
-# `@chaoxinghelper/android-http`
+# `@chaoxing-mcp/android-http`
 
 Android 同步用的 Cookie 感知 HTTP 客户端。
 

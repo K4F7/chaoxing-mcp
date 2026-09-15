@@ -7,7 +7,7 @@ import {
   SyncItemKind,
   type PlannedReminder,
   type SyncItem,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 
 export type ReminderPreviewRow = {
   key: string;

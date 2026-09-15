@@ -11,7 +11,7 @@ import {
   type CourseCatalog,
   type ReminderHistory,
   type SyncConfig,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 
 import { type JsonKeyValueStore } from "./json-store";
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join, relative, sep } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -12,6 +12,61 @@ const LAUNCH_LINES = [
   'args = ["start", "--silent", "--prefix", "packages/chaoxing-mcp"]',
   "startup_timeout_sec = 60",
 ];
+
+const OLD_NPM_SCOPE = "@" + "chaoxinghelper/";
+const OLD_CLONE = "K4F7/" + "chaoxinghelper";
+const SKIP_DIR_NAMES = new Set([
+  ".git",
+  "node_modules",
+  ".dart_tool",
+  "build",
+  "coverage",
+]);
+const SKIP_LOCK_NAMES = new Set([
+  "package-lock.json",
+  "bun.lock",
+  "pubspec.lock",
+  "uv.lock",
+]);
+
+function readJson(relativePath: string): { name: string } {
+  return JSON.parse(readFileSync(join(repoRoot, relativePath), "utf8")) as {
+    name: string;
+  };
+}
+
+function shouldSkipFile(relativePath: string): boolean {
+  const parts = relativePath.split(sep);
+  const base = parts.at(-1) ?? "";
+  if (SKIP_LOCK_NAMES.has(base)) {
+    return true;
+  }
+  if (relativePath.includes(`${sep}android${sep}src${sep}main${sep}java${sep}`)) {
+    return true;
+  }
+  return false;
+}
+
+function collectTextFiles(dir: string, files: string[]): void {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (SKIP_DIR_NAMES.has(entry.name)) {
+      continue;
+    }
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      collectTextFiles(full, files);
+      continue;
+    }
+    if (!entry.isFile()) {
+      continue;
+    }
+    const relativePath = relative(repoRoot, full);
+    if (shouldSkipFile(relativePath)) {
+      continue;
+    }
+    files.push(full);
+  }
+}
 
 describe("MCP grok config", () => {
   test("README, docs/mcp.md, and .grok/config.toml share the same launch command", () => {
@@ -26,5 +81,50 @@ describe("MCP grok config", () => {
     }
     assert.equal(docs.includes("list_todos"), true);
     assert.equal(readme.includes("list_todos"), true);
+  });
+
+  test("npm names and docs use chaoxing-mcp without leftover helper scope or clone URL", () => {
+    assert.equal(readJson("package.json").name, "chaoxing-mcp");
+    assert.equal(readJson("packages/chaoxing-mcp/package.json").name, "@chaoxing-mcp/mcp");
+    assert.equal(
+      readJson("packages/chaoxing-domain/package.json").name,
+      "@chaoxing-mcp/domain",
+    );
+    assert.equal(
+      readJson("packages/chaoxing-android-alarms/package.json").name,
+      "@chaoxing-mcp/android-alarms",
+    );
+    assert.equal(
+      readJson("packages/chaoxing-android-http/package.json").name,
+      "@chaoxing-mcp/android-http",
+    );
+
+    const agents = readFileSync(join(repoRoot, "AGENTS.md"), "utf8");
+    assert.equal(agents.includes("K4F7/chaoxing-mcp"), true);
+    assert.equal(agents.includes(OLD_CLONE), false);
+
+    const leftovers: string[] = [];
+    const files: string[] = [];
+    collectTextFiles(repoRoot, files);
+    for (const file of files) {
+      const text = readFileSync(file, "utf8");
+      if (text.includes(OLD_NPM_SCOPE) || text.includes(OLD_CLONE)) {
+        leftovers.push(relative(repoRoot, file));
+      }
+    }
+    assert.deepEqual(leftovers, []);
+  });
+
+  test("keeps the existing keychain service and Playwright profile path", () => {
+    const credentials = readFileSync(
+      join(repoRoot, "packages/chaoxing-mcp/src/credentials.ts"),
+      "utf8",
+    );
+    const openLogin = readFileSync(
+      join(repoRoot, "packages/chaoxing-mcp/src/open-login.ts"),
+      "utf8",
+    );
+    assert.match(credentials, /SERVICE = "chaoxinghelper\.mcp"/);
+    assert.match(openLogin, /"\.chaoxinghelper", "chrome-profile"/);
   });
 });

@@ -3,13 +3,13 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
-      "@chaoxinghelper/android-alarms": [
+      "@chaoxing-mcp/android-alarms": [
         "../../packages/chaoxing-android-alarms/src/index.ts"
       ],
-      "@chaoxinghelper/android-http": [
+      "@chaoxing-mcp/android-http": [
         "../../packages/chaoxing-android-http/src/index.ts"
       ],
-      "@chaoxinghelper/domain": ["../../packages/chaoxing-domain/src/index.ts"]
+      "@chaoxing-mcp/domain": ["../../packages/chaoxing-domain/src/index.ts"]
     }
   },
   "include": ["App.tsx", "index.ts", "src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts"],

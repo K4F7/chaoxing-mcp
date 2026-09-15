@@ -2,7 +2,7 @@ import {
   addHours,
   ReminderIntensity,
   type PlannedReminder,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 
 import { AlarmLimitExceededError } from "./errors";
 import { assertUniqueRequestCodes, stableRequestCode } from "./request-code";

@@ -2,7 +2,7 @@ import {
   SyncDisplayStatus,
   isTrustedChaoxingUrl,
   type SyncItem,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 
 export type TodoGroupId = "overdue" | "today" | "upcoming" | "unscheduled";
 

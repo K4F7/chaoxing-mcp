@@ -5,7 +5,7 @@ import {
   type PlannedReminder,
   type ReminderHistory,
   type SyncItem,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 
 export type DesktopNotification = {
   title: string;

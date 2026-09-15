@@ -14,6 +14,6 @@ function withChaoxingAndroidHttp(config) {
 
 module.exports = createRunOncePlugin(
   withChaoxingAndroidHttp,
-  "@chaoxinghelper/android-http",
+  "@chaoxing-mcp/android-http",
   "0.1.0",
 );

@@ -5,7 +5,7 @@ import {
   courseSpaceKey,
   monitoredCourses,
   type CourseCatalog,
-} from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/domain";
 
 import type { SyncSettings } from "../persist/app-store";
 

@@ -1,4 +1,4 @@
-import { isTrustedChaoxingUrl } from "@chaoxinghelper/domain";
+import { isTrustedChaoxingUrl } from "@chaoxing-mcp/domain";
 
 import { cookieHeaderForChaoxingUri } from "./cookie-store";
 import { CHAOXING_HOME_URL } from "./login-navigation";

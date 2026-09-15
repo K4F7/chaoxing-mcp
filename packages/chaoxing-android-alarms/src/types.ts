@@ -1,4 +1,4 @@
-import { type ReminderIntensity } from "@chaoxinghelper/domain";
+import { type ReminderIntensity } from "@chaoxing-mcp/domain";
 
 /** Android's documented per-app concurrent alarm ceiling. */
 export const ANDROID_CONCURRENT_ALARM_LIMIT = 500;

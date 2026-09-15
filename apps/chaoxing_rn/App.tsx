@@ -6,8 +6,8 @@ import {
   ReminderAlarmScheduler,
   UnsupportedAlarmBackend,
   UnsupportedAlarmRuntime,
-} from "@chaoxinghelper/android-alarms";
-import { createLocalSyncRunner } from "@chaoxinghelper/domain";
+} from "@chaoxing-mcp/android-alarms";
+import { createLocalSyncRunner } from "@chaoxing-mcp/domain";
 
 import {
   createProductionAlarmBackend,

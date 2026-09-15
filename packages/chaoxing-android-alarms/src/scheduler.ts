@@ -1,4 +1,4 @@
-import { type PlannedReminder } from "@chaoxinghelper/domain";
+import { type PlannedReminder } from "@chaoxing-mcp/domain";
 
 import { ExactAlarmPermissionError } from "./errors";
 import { mapPlannedReminders, type MapAlarmOptions } from "./mapping";

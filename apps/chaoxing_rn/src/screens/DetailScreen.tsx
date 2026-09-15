@@ -1,6 +1,6 @@
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import type { SyncItem } from "@chaoxinghelper/domain";
+import type { SyncItem } from "@chaoxing-mcp/domain";
 
 import { formatDueAt, kindLabel, trustedItemUrl } from "../sync/todo-groups";
 

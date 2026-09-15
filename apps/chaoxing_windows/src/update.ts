@@ -1,7 +1,7 @@
 export const TRUSTED_LATEST_RELEASE_API =
-  "https://api.github.com/repos/K4F7/chaoxinghelper/releases/latest";
+  "https://api.github.com/repos/K4F7/chaoxing-mcp/releases/latest";
 export const TRUSTED_RELEASES_PAGE =
-  "https://github.com/K4F7/chaoxinghelper/releases";
+  "https://github.com/K4F7/chaoxing-mcp/releases";
 
 export type UpdateInfo = {
   buildNumber: number;

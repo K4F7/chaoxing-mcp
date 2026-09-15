@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { addHours } from "@chaoxinghelper/domain";
+import { addHours } from "@chaoxing-mcp/domain";
 
 import { buildReminderPreview } from "../src/preview";
 

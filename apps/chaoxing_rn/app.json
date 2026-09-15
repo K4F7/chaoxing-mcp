@@ -22,8 +22,8 @@
     },
     "plugins": [
       "expo-secure-store",
-      "@chaoxinghelper/android-alarms/app.plugin.cjs",
-      "@chaoxinghelper/android-http/app.plugin.cjs"
+      "@chaoxing-mcp/android-alarms/app.plugin.cjs",
+      "@chaoxing-mcp/android-http/app.plugin.cjs"
     ],
     "web": {
       "favicon": "./assets/favicon.png"
