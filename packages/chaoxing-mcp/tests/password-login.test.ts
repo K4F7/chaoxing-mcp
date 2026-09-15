@@ -403,6 +403,8 @@ describe("createFallbackPasswordLogin", () => {
         assert.match(error.message, /Playwright fallback/i);
         assert.doesNotMatch(error.message, /s3cret-value/);
         assert.match(error.message, /已隐藏/);
+        assert.ok(error.cause instanceof Error);
+        assert.doesNotMatch(error.cause.message, /s3cret-value/);
         return true;
       },
     );

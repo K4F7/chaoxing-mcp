@@ -94,7 +94,7 @@ export function createFallbackPasswordLogin(
           );
           throw new Error(
             `Password login (账密直登) failed: ${primaryMsg}; Playwright fallback: ${fallbackMsg}`,
-            { cause: fallbackError },
+            { cause: new Error(fallbackMsg) },
           );
         }
       }
@@ -167,12 +167,11 @@ export function createHttpPasswordLogin(
         );
       }
       if (parsed.status !== true) {
-        throw new Error(
-          describeFanyaLoginFailure(
-            safeBody,
-            typeof parsed.msg2 === "string" ? parsed.msg2 : "login failed",
-          ),
-        );
+        const msg2Hint =
+          typeof parsed.msg2 === "string"
+            ? redactLoginSecrets(parsed.msg2, passwordCreds)
+            : "login failed";
+        throw new Error(describeFanyaLoginFailure(safeBody, msg2Hint));
       }
 
       const cookie = cookieHeaderFromSetCookie(readSetCookies(response.headers));
@@ -234,8 +233,19 @@ function readSetCookies(headers: Pick<Headers, "get">): string[] {
   if (typeof withGetSetCookie.getSetCookie === "function") {
     return withGetSetCookie.getSetCookie();
   }
+  // Node < 18.14 / undici without getSetCookie collapses multiple Set-Cookie
+  // headers; Expires commas make safe splitting unreliable. Require getSetCookie.
   const combined = headers.get("set-cookie");
-  return combined == null || combined.trim() === "" ? [] : [combined];
+  if (combined == null || combined.trim() === "") {
+    return [];
+  }
+  // Single cookie responses still work; multi-cookie needs getSetCookie.
+  if (!combined.includes(",")) {
+    return [combined];
+  }
+  // Heuristic: split on ", <cookie-name>=" patterns typical of collapsed headers.
+  const parts = combined.split(/,(?=\s*[^;=,]+=)/);
+  return parts.map((part) => part.trim()).filter((part) => part.length > 0);
 }
 
 function cookieHeaderFromSetCookie(setCookies: string[]): string | null {
