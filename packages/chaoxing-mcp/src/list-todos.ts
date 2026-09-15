@@ -1,12 +1,17 @@
 import { COURSE_LIST_URL, INBOX_URL, courseWorkListUrl } from "./chaoxing-urls";
+import { isTrustedChaoxingUrl } from "./http";
 import { AUTH_PROBE_URL, looksLikeLoginPage } from "./login-page";
 import {
   currentSemesterOf,
+  dueAtFromRemaining,
   parseCourseSpaceTodos,
   parseEnrolledCourses,
   parseInboxNotices,
+  parseWorkDetailDueAt,
   semesterCodeOf,
 } from "./parse";
+
+const WORK_DETAIL_BASE = "https://mooc1-api.chaoxing.com";
 
 export type TodoScope = "current_semester" | "all";
 
@@ -141,6 +146,39 @@ function isSuccessfulHttp(statusCode: number): boolean {
   return statusCode >= 200 && statusCode < 300;
 }
 
+function resolveTrustedWorkUrl(raw: string | null): string | null {
+  if (raw == null || raw.length === 0) {
+    return null;
+  }
+  try {
+    const url = new URL(raw, WORK_DETAIL_BASE).toString();
+    return isTrustedChaoxingUrl(url) ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+async function dueAtFromWorkDetail(
+  http: ChaoxingHttp,
+  cookie: string,
+  entryUrl: string | null,
+  now: Date,
+): Promise<string | null> {
+  const url = resolveTrustedWorkUrl(entryUrl);
+  if (url == null) {
+    return null;
+  }
+  try {
+    const response = await http.request({ url, cookie });
+    if (!isSuccessfulHttp(response.statusCode)) {
+      return null;
+    }
+    return parseWorkDetailDueAt(response.body, now);
+  } catch {
+    return null;
+  }
+}
+
 function resolveScope(scope: string | undefined): TodoScope | null {
   if (scope === undefined) {
     return "current_semester";
@@ -240,6 +278,7 @@ async function resolveAuthenticatedCookie(
 export async function listTodos(
   scope: string | undefined,
   ports: ListTodosPorts,
+  now: Date = new Date(),
 ): Promise<ListTodosResult> {
   const resolved = resolveScope(scope);
   if (resolved === null) {
@@ -313,17 +352,27 @@ export async function listTodos(
       continue;
     }
     courseSpaceSuccesses += 1;
-    for (const task of parseCourseSpaceTodos(space.body, course)) {
+    for (const task of parseCourseSpaceTodos(space.body, course, now)) {
       seenIds.add(`${course.courseId}:${task.id}`);
       if (task.closed) {
         continue;
+      }
+      let dueAt = task.due_at;
+      if (dueAt == null) {
+        dueAt =
+          (await dueAtFromWorkDetail(
+            ports.http,
+            cookie,
+            task.entry_url,
+            now,
+          )) ?? dueAtFromRemaining(task.remaining_text ?? "", now);
       }
       todos.push({
         id: task.id,
         title: task.title,
         course_title: course.title,
         semester_code: semesterCodeOf(course.title),
-        due_at: task.due_at,
+        due_at: dueAt,
         source: "course_space",
         course_id: course.courseId,
         class_id: course.classId,

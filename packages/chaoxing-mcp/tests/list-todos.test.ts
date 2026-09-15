@@ -1445,3 +1445,145 @@ describe("listTodos courses_scanned follows scope", () => {
     assert.equal(requested.includes(workListUrl("103", "203", "1")), true);
   });
 });
+
+describe("listTodos due_at from remaining time and work detail", () => {
+  const now = new Date("2026-09-14T09:23:32.000Z");
+  const course = {
+    courseId: "102",
+    classId: "202",
+    cpi: "1",
+    title: "261-软件工程",
+  };
+  const remainingListHtml = `
+    <ul>
+      <li data="/mooc-ans/work/phone/task-work?taskrefId=55507098&amp;courseId=102&amp;classId=202" data1="55507098">
+        <p>新建作业20260914172332</p>
+        <span>未交</span>
+        <span class="fr">剩余172小时1分钟</span>
+      </li>
+    </ul>`;
+
+  test("list with only 剩余172小时1分钟 yields due_at about now+172h1m when detail is missing", async () => {
+    const detailUrl = new URL(
+      "/mooc-ans/work/phone/task-work?taskrefId=55507098&courseId=102&classId=202",
+      "https://mooc1-api.chaoxing.com",
+    ).toString();
+    const fake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: {
+        [AUTH_PROBE_URL]: AUTH_OK,
+        [COURSE_LIST_URL]: okHtml(
+          COURSE_LIST_URL,
+          enrolledCoursesHtml([course]),
+        ),
+        [workListUrl(course.courseId, course.classId, course.cpi)]: okHtml(
+          workListUrl(course.courseId, course.classId, course.cpi),
+          remainingListHtml,
+        ),
+        [detailUrl]: { statusCode: 404, url: detailUrl, body: "not found" },
+        [INBOX_URL]: okHtml(INBOX_URL, inboxHtml([])),
+      },
+    });
+
+    const result = await listTodos("current_semester", fake.ports, now);
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.todos.length, 1);
+    assert.equal(result.todos[0]?.id, "55507098");
+    assert.equal(result.todos[0]?.title, "新建作业20260914172332");
+    assert.equal(result.todos[0]?.due_at, "2026-09-21T21:24:32+08:00");
+    assert.equal(JSON.stringify(result).includes(VALID_COOKIE), false);
+  });
+
+  test("prefers absolute detail due_at over remaining when the trusted work page succeeds", async () => {
+    const detailUrl = new URL(
+      "/mooc-ans/work/phone/task-work?taskrefId=55507098&courseId=102&classId=202",
+      "https://mooc1-api.chaoxing.com",
+    ).toString();
+    const fake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: {
+        [AUTH_PROBE_URL]: AUTH_OK,
+        [COURSE_LIST_URL]: okHtml(
+          COURSE_LIST_URL,
+          enrolledCoursesHtml([course]),
+        ),
+        [workListUrl(course.courseId, course.classId, course.cpi)]: okHtml(
+          workListUrl(course.courseId, course.classId, course.cpi),
+          remainingListHtml,
+        ),
+        [detailUrl]: okHtml(
+          detailUrl,
+          `<h4>截止时间：09-22 23:25</h4>
+           <span aria-label="截止时间09月22日23时25分34秒"></span>`,
+        ),
+        [INBOX_URL]: okHtml(INBOX_URL, inboxHtml([])),
+      },
+    });
+
+    const result = await listTodos("current_semester", fake.ports, now);
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.todos[0]?.due_at, "2026-09-22T23:25:34+08:00");
+    assert.equal(
+      fake.httpRequests().some((req) => req.url === detailUrl),
+      true,
+    );
+    assert.equal(JSON.stringify(result).includes(VALID_COOKIE), false);
+  });
+
+  test("does not cookie-fetch an untrusted work entry; remaining still yields due_at", async () => {
+    const untrusted =
+      "https://evil.example/steal?taskrefId=55507098&courseId=102&classId=202";
+    const fake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: {
+        [AUTH_PROBE_URL]: AUTH_OK,
+        [COURSE_LIST_URL]: okHtml(
+          COURSE_LIST_URL,
+          enrolledCoursesHtml([course]),
+        ),
+        [workListUrl(course.courseId, course.classId, course.cpi)]: okHtml(
+          workListUrl(course.courseId, course.classId, course.cpi),
+          `<ul>
+            <li data="${untrusted}">
+              <p>新建作业20260914172332</p>
+              <span>未交</span>
+              <span class="fr">剩余172小时1分钟</span>
+            </li>
+          </ul>`,
+        ),
+        [INBOX_URL]: okHtml(INBOX_URL, inboxHtml([])),
+      },
+    });
+
+    const result = await listTodos("current_semester", fake.ports, now);
+
+    assert.equal(result.todos[0]?.due_at, "2026-09-21T21:24:32+08:00");
+    assert.equal(
+      fake.httpRequests().some((req) => req.url === untrusted),
+      false,
+    );
+    assert.equal(JSON.stringify(result).includes(VALID_COOKIE), false);
+  });
+
+  test("does not fetch work detail when the list already has absolute 截止时间", async () => {
+    const fake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: fixtureAResponses(),
+    });
+
+    const result = await listTodos("current_semester", fake.ports, now);
+
+    assert.equal(
+      result.todos.find((todo) => todo.title === "新课作业")?.due_at,
+      "2026-09-20T23:59:00+08:00",
+    );
+    assert.equal(
+      fake
+        .httpRequests()
+        .some((req) => req.url.includes("/mooc-ans/work/phone/task-work")),
+      false,
+    );
+  });
+});
