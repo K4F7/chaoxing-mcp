@@ -51,6 +51,8 @@ export type ListTodosResult = {
   current_semester: string | null;
   sources_scanned: SourcesScanned;
   courses_scanned: ScannedCourseSummary[];
+  courses_in_scope_count: number;
+  courses_enrolled_count: number;
   todos: TodoItem[];
   unmatched_assignment_notices: number;
   errors: ListTodosError[];
@@ -93,6 +95,7 @@ function unscannedResult(
   scope: TodoScope | null,
   errors: ListTodosError[],
   courses_scanned: ScannedCourseSummary[] = [],
+  courses_enrolled_count = 0,
 ): ListTodosResult {
   return {
     isError: true,
@@ -101,6 +104,8 @@ function unscannedResult(
     current_semester: null,
     sources_scanned: { course_space: false, inbox: false },
     courses_scanned,
+    courses_in_scope_count: courses_scanned.length,
+    courses_enrolled_count,
     todos: [],
     unmatched_assignment_notices: 0,
     errors,
@@ -270,14 +275,14 @@ export async function listTodos(
     ]);
   }
   const courses = parseEnrolledCourses(coursesResponse.body);
-  const coursesScanned = summarizeCourses(courses);
   const currentSemester = currentSemesterOf(courses);
   if (resolved === "current_semester" && currentSemester === null) {
     return unscannedResult(
       "no_semester_code",
       resolved,
       [{ where: "courses", message: "解析不到学期代码" }],
-      coursesScanned,
+      summarizeCourses(courses),
+      courses.length,
     );
   }
 
@@ -379,7 +384,9 @@ export async function listTodos(
       course_space: courseSpaceSuccesses > 0,
       inbox: inboxScanned,
     },
-    courses_scanned: coursesScanned,
+    courses_scanned: summarizeCourses(inScope),
+    courses_in_scope_count: inScope.length,
+    courses_enrolled_count: courses.length,
     todos,
     unmatched_assignment_notices: unmatchedAssignmentNotices,
     errors,
