@@ -1303,10 +1303,14 @@ describe("listTodos student courselist POST", () => {
     const result = await listTodos("current_semester", fake.ports);
     assert.equal(result.status, "ok");
     assert.deepEqual(result.courses_scanned, [
-      { id: "101", title: "253-旧课", semester_code: "253" },
       { id: "102", title: "261-新课", semester_code: "261" },
-      { id: "103", title: "选修无学期", semester_code: null },
     ]);
+    assert.equal(result.courses_in_scope_count, result.courses_scanned.length);
+    assert.equal(result.courses_enrolled_count, 3);
+    assert.equal(
+      result.courses_enrolled_count >= result.courses_in_scope_count,
+      true,
+    );
     assert.equal(JSON.stringify(result).includes(VALID_COOKIE), false);
   });
 
@@ -1371,5 +1375,73 @@ describe("listTodos student courselist POST", () => {
       teacherFake.ports,
     );
     assert.equal(teacherResult.status, "no_semester_code");
+  });
+});
+
+describe("listTodos courses_scanned follows scope", () => {
+  test("default current_semester summary is in-scope only and excludes no-semester-code courses", async () => {
+    const fake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: fixtureAResponses(),
+    });
+
+    const result = await listTodos(undefined, fake.ports);
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.scope, "current_semester");
+    assert.equal(result.current_semester, "261");
+    assert.deepEqual(result.courses_scanned, [
+      { id: "102", title: "261-新课", semester_code: "261" },
+    ]);
+    assert.equal(result.courses_scanned.length, 1);
+    assert.equal(result.courses_in_scope_count, result.courses_scanned.length);
+    assert.equal(result.courses_enrolled_count, 3);
+    assert.equal(
+      result.courses_enrolled_count >= result.courses_in_scope_count,
+      true,
+    );
+    assert.equal(
+      result.courses_scanned.some((course) => course.semester_code == null),
+      false,
+    );
+    assert.equal(
+      result.courses_scanned.some((course) => course.title === "选修无学期"),
+      false,
+    );
+    assert.deepEqual(
+      result.todos.map((todo) => todo.title),
+      ["新课作业", "新课打回"],
+    );
+    const requested = fake.httpRequests().map((req) => req.url);
+    assert.equal(requested.includes(workListUrl("102", "202", "1")), true);
+    assert.equal(requested.includes(workListUrl("101", "201", "1")), false);
+    assert.equal(requested.includes(workListUrl("103", "203", "1")), false);
+  });
+
+  test("scope=all summary includes the full enrolled set including no-semester-code", async () => {
+    const fake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: fixtureAResponses(),
+    });
+
+    const result = await listTodos("all", fake.ports);
+
+    assert.equal(result.status, "ok");
+    assert.deepEqual(result.courses_scanned, [
+      { id: "101", title: "253-旧课", semester_code: "253" },
+      { id: "102", title: "261-新课", semester_code: "261" },
+      { id: "103", title: "选修无学期", semester_code: null },
+    ]);
+    assert.equal(result.courses_in_scope_count, result.courses_scanned.length);
+    assert.equal(result.courses_in_scope_count, 3);
+    assert.equal(result.courses_enrolled_count, 3);
+    assert.deepEqual(
+      result.todos.map((todo) => todo.course_title),
+      ["253-旧课", "261-新课", "261-新课", "选修无学期"],
+    );
+    const requested = fake.httpRequests().map((req) => req.url);
+    assert.equal(requested.includes(workListUrl("101", "201", "1")), true);
+    assert.equal(requested.includes(workListUrl("102", "202", "1")), true);
+    assert.equal(requested.includes(workListUrl("103", "203", "1")), true);
   });
 });

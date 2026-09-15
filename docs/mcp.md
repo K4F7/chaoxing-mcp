@@ -99,6 +99,6 @@ MCP 凭据只走本机钥匙串：
 - `scope=all`：学期交界或怀疑漏了旧课未完成待办时再用；鉴权成功后空 `todos` 表示范围内没有仍须完成的待办，不是认证失败。
 - `status: ok` 且 `todos` 为空表示当前没有未完成待办，不是失败。
 - `auth_expired` 以及其他失败都是 `isError`，不会伪装成「没有作业」。
-- 结果里的 `courses_scanned` 是已解析的在读课摘要（`id` / `title` / `semester_code`），便于确认「本学期能看到什么」；不含 cookie。
+- 结果里的 `courses_scanned` 随 `scope`：默认 `current_semester` 只含当前学期课（无学期码的课不进默认范围、也不进摘要）；`scope=all` 才是全部在读课（含无学期码）。摘要字段为 `id` / `title` / `semester_code`。`courses_in_scope_count` 等于 `courses_scanned.length`；`courses_enrolled_count` 是过滤前的在读课总数。不含 cookie。
 
 课表拉取会对 `courselistdata` 使用学生侧参数（`courseType=1` 的 POST/form）。不加时页面常落在「教」侧（`clazzId=0`、课名为空），从而误报 `no_semester_code`。
