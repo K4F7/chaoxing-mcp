@@ -31,10 +31,7 @@ const ARCHIVAL_BUN_DOC_PREFIXES = [`docs${sep}superpowers${sep}`];
 const BUN = "bu" + "n";
 const BUN_LOCK = `${BUN}.lock`;
 const TYPES_BUN = `@types/${BUN}`;
-const BUN_TEST_IMPORT = `from "${BUN}:test"`;
-const BUN_MODULE_IMPORT = `from "${BUN}"`;
-const BUN_RUN = `${BUN} run`;
-const BUN_TEST = `${BUN} test`;
+const BUN_REFERENCE = new RegExp(`\\b${BUN}\\b`, "i");
 
 function readJson(relativePath: string): { name: string } {
   return JSON.parse(readFileSync(join(repoRoot, relativePath), "utf8")) as {
@@ -159,13 +156,7 @@ describe("MCP grok config", () => {
         continue;
       }
       const text = readFileSync(file, "utf8");
-      if (
-        text.includes(BUN_TEST_IMPORT) ||
-        text.includes(BUN_MODULE_IMPORT) ||
-        text.includes(TYPES_BUN) ||
-        text.includes(BUN_RUN) ||
-        text.includes(BUN_TEST)
-      ) {
+      if (BUN_REFERENCE.test(text)) {
         leftovers.push(relativePath);
       }
     }

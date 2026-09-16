@@ -165,12 +165,12 @@ function openBrowser(url: string): void {
     process.platform === "darwin"
       ? (["open", url] as const)
       : process.platform === "win32"
-        ? (["cmd", "/c", "start", url] as const)
+        ? (["cmd", "/c", "start", "", url] as const)
         : (["xdg-open", url] as const);
   spawn(command[0], command.slice(1), {
     stdio: "ignore",
     detached: true,
-    shell: process.platform === "win32",
+    shell: false,
   }).unref();
 }
 
