@@ -15,9 +15,9 @@ const POLL_INTERVAL_MS = 2_000;
 
 await applyDevVars();
 
-const homeUrl = Bun.env.CHAOXING_HOME_URL || DEFAULT_CHAOXING_HOME_URL;
+const homeUrl = process.env.CHAOXING_HOME_URL || DEFAULT_CHAOXING_HOME_URL;
 const existing = await checkChaoxingAuth({
-  cookie: Bun.env.CHAOXING_COOKIE,
+  cookie: process.env.CHAOXING_COOKIE,
   homeUrl,
 });
 

@@ -14,7 +14,7 @@
 - `packages/chaoxing-mcp/`：本机 stdio MCP（唯一工具 `list_todos`）。见 [`docs/mcp.md`](./docs/mcp.md)。
 - `legacy/chaoxing_app/`：Flutter 参考实现，**不是**生产出货路径。
 - `docs/`：产品文档与架构决策记录。
-- `src/`、`scripts/`、`tests/`：早期 Cloudflare Worker 实现的遗留代码，已不参与 App 运行路径。
+- `src/`、`scripts/`、`tests/`：早期 Cloudflare Worker 实现的遗留代码，已不参与 App 运行路径。若要跑这些脚本或测试，在仓库根使用 Node + npm（`npm ci && npm test && npm run typecheck`；脚本是 `node --import tsx`）。
 
 ## 使用
 

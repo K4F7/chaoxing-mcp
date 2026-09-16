@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import assert from "node:assert/strict";
+import { describe, test } from "node:test";
 
 import { buildAppSyncResponse } from "../src/app-sync";
 import type { ProcessingResult } from "../src/processor";
@@ -32,39 +33,32 @@ describe("app sync response", () => {
       { now: new Date("2026-06-05T09:00:00.000Z") },
     );
 
-    expect(response).toEqual({
-      lastSyncedAt: "2026-06-05T08:00:00.000Z",
-      authStatus: "ok",
-      items: [
-        expect.objectContaining({
-          id: "exam-soon",
-          kind: "exam",
-          displayStatus: "today",
-          dueInHours: 1,
-        }),
-        expect.objectContaining({
-          id: "assignment-later",
-          displayStatus: "upcoming",
-          dueInHours: 25,
-        }),
-      ],
-      failures: [
-        {
-          entryUrl: "https://example.com/fail",
-          sourceTitle: "失败通知",
-          message: "assignment_fetch_failed_500",
-        },
-      ],
-      meta: {
-        inbox: {
-          fetched: 3,
-          relevant: 2,
-          inspectedDetails: 2,
-        },
-        fetchedRequirements: 2,
-        totalUniqueActivityLinks: 2,
-        totalUniqueWorkLinks: 2,
+    assert.equal(response.lastSyncedAt, "2026-06-05T08:00:00.000Z");
+    assert.equal(response.authStatus, "ok");
+    assert.equal(response.items.length, 2);
+    assert.equal(response.items[0]?.id, "exam-soon");
+    assert.equal(response.items[0]?.kind, "exam");
+    assert.equal(response.items[0]?.displayStatus, "today");
+    assert.equal(response.items[0]?.dueInHours, 1);
+    assert.equal(response.items[1]?.id, "assignment-later");
+    assert.equal(response.items[1]?.displayStatus, "upcoming");
+    assert.equal(response.items[1]?.dueInHours, 25);
+    assert.deepEqual(response.failures, [
+      {
+        entryUrl: "https://example.com/fail",
+        sourceTitle: "失败通知",
+        message: "assignment_fetch_failed_500",
       },
+    ]);
+    assert.deepEqual(response.meta, {
+      inbox: {
+        fetched: 3,
+        relevant: 2,
+        inspectedDetails: 2,
+      },
+      fetchedRequirements: 2,
+      totalUniqueActivityLinks: 2,
+      totalUniqueWorkLinks: 2,
     });
   });
 
@@ -80,12 +74,8 @@ describe("app sync response", () => {
       { now: new Date("2026-06-05T09:00:00.000Z") },
     );
 
-    expect(response.items[0]).toEqual(
-      expect.objectContaining({
-        displayStatus: "overdue",
-        dueInHours: -1,
-      }),
-    );
+    assert.equal(response.items[0]?.displayStatus, "overdue");
+    assert.equal(response.items[0]?.dueInHours, -1);
   });
 });
 

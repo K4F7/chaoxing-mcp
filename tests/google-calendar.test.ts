@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import assert from "node:assert/strict";
+import { describe, test } from "node:test";
 
 import {
   buildGoogleCalendarEvent,
@@ -11,13 +12,13 @@ describe("google calendar sync", () => {
   test("builds google calendar event payloads with deterministic ids", async () => {
     const event = await buildGoogleCalendarEvent(syncItem());
 
-    expect(event.id).toMatch(/^cx[0-9a-f]{64}$/);
-    expect(event.summary).toBe("作业截止：作业通知");
-    expect(event.start).toEqual({
+    assert.match(event.id, /^cx[0-9a-f]{64}$/);
+    assert.equal(event.summary, "作业截止：作业通知");
+    assert.deepEqual(event.start, {
       dateTime: "2026-06-05T15:59:00.000Z",
       timeZone: "Asia/Shanghai",
     });
-    expect(event.extendedProperties.private.chaoxingItemId).toBe("assignment-123");
+    assert.equal(event.extendedProperties.private.chaoxingItemId, "assignment-123");
   });
 
   test("updates existing events and inserts missing events", async () => {
@@ -47,7 +48,7 @@ describe("google calendar sync", () => {
       },
     );
 
-    expect(result).toEqual({
+    assert.deepEqual(result, {
       calendarId: "calendar@example.com",
       attempted: 1,
       created: 1,
@@ -55,18 +56,24 @@ describe("google calendar sync", () => {
       skipped: 0,
       failed: [],
     });
-    expect(calls.map((call) => call.method)).toEqual(["PUT", "POST"]);
-    expect(calls[0].url).toContain("/calendars/calendar%40example.com/events/");
+    assert.deepEqual(
+      calls.map((call) => call.method),
+      ["PUT", "POST"],
+    );
+    assert.equal(
+      calls[0]?.url.includes("/calendars/calendar%40example.com/events/"),
+      true,
+    );
   });
 
   test("refreshes oauth access tokens", async () => {
     const fetcher = async (_input: string | URL | Request, init?: RequestInit) => {
-      expect(String(init?.body)).toContain("grant_type=refresh_token");
+      assert.equal(String(init?.body).includes("grant_type=refresh_token"), true);
       return Response.json({ access_token: "access-token" });
     };
 
-    await expect(
-      refreshGoogleOAuthAccessToken(
+    assert.equal(
+      await refreshGoogleOAuthAccessToken(
         {
           calendarId: "primary",
           oauthClientId: "client",
@@ -75,7 +82,8 @@ describe("google calendar sync", () => {
         },
         { fetcher: fetcher as unknown as typeof fetch },
       ),
-    ).resolves.toBe("access-token");
+      "access-token",
+    );
   });
 });
 

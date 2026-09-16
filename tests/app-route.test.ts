@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import assert from "node:assert/strict";
+import { afterEach, describe, test } from "node:test";
 
 import worker from "../src/index";
 
@@ -15,9 +16,9 @@ describe("app sync route", () => {
       { RUN_TOKEN: "secret", CHAOXING_COOKIE: "UID=1" },
     );
 
-    expect(response.status).toBe(401);
+    assert.equal(response.status, 401);
     const payload = (await response.json()) as unknown;
-    expect(payload).toEqual({ error: "unauthorized" });
+    assert.deepEqual(payload, { error: "unauthorized" });
   });
 
   test("returns compact app sync payload for authenticated clients", async () => {
@@ -31,25 +32,29 @@ describe("app sync route", () => {
     );
     const payload = (await response.json()) as {
       authStatus?: string;
-      items?: unknown[];
+      items?: Array<{
+        id?: string;
+        kind?: string;
+        title?: string;
+        dueAt?: string;
+        displayStatus?: string;
+        dueInHours?: number;
+      }>;
       lastSyncedAt?: string;
       failures?: unknown[];
     };
 
-    expect(response.status).toBe(200);
-    expect(payload.authStatus).toBe("ok");
-    expect(payload.lastSyncedAt).toEqual(expect.any(String));
-    expect(payload.failures).toEqual([]);
-    expect(payload.items).toEqual([
-      expect.objectContaining({
-        id: "assignment-1",
-        kind: "assignment",
-        title: "作业通知",
-        dueAt: "2026-06-05T15:59:00.000Z",
-        displayStatus: expect.any(String),
-        dueInHours: expect.any(Number),
-      }),
-    ]);
+    assert.equal(response.status, 200);
+    assert.equal(payload.authStatus, "ok");
+    assert.equal(typeof payload.lastSyncedAt, "string");
+    assert.deepEqual(payload.failures, []);
+    assert.equal(payload.items?.length, 1);
+    assert.equal(payload.items?.[0]?.id, "assignment-1");
+    assert.equal(payload.items?.[0]?.kind, "assignment");
+    assert.equal(payload.items?.[0]?.title, "作业通知");
+    assert.equal(payload.items?.[0]?.dueAt, "2026-06-05T15:59:00.000Z");
+    assert.equal(typeof payload.items?.[0]?.displayStatus, "string");
+    assert.equal(typeof payload.items?.[0]?.dueInHours, "number");
   });
 });
 

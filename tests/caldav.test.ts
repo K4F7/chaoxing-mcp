@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import assert from "node:assert/strict";
+import { describe, test } from "node:test";
 
 import { handleCalDav } from "../src/caldav";
 import type { SyncItem } from "../src/sync";
@@ -14,9 +15,9 @@ describe("caldav", () => {
     });
     const body = await response.text();
 
-    expect(response.status).toBe(207);
-    expect(body).toContain("/caldav/calendars/me/deadlines/");
-    expect(body).toContain("/caldav/calendars/me/todos/");
+    assert.equal(response.status, 207);
+    assert.equal(body.includes("/caldav/calendars/me/deadlines/"), true);
+    assert.equal(body.includes("/caldav/calendars/me/todos/"), true);
   });
 
   test("reports calendar objects", async () => {
@@ -28,10 +29,13 @@ describe("caldav", () => {
     });
     const body = await response.text();
 
-    expect(response.status).toBe(207);
-    expect(body).toContain("/caldav/calendars/me/deadlines/assignment-123.ics");
-    expect(body).toContain("BEGIN:VCALENDAR");
-    expect(body).toContain("BEGIN:VEVENT");
+    assert.equal(response.status, 207);
+    assert.equal(
+      body.includes("/caldav/calendars/me/deadlines/assignment-123.ics"),
+      true,
+    );
+    assert.equal(body.includes("BEGIN:VCALENDAR"), true);
+    assert.equal(body.includes("BEGIN:VEVENT"), true);
   });
 
   test("gets todo objects", async () => {
@@ -43,9 +47,9 @@ describe("caldav", () => {
     });
     const body = await response.text();
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get("Content-Type")).toContain("text/calendar");
-    expect(body).toContain("BEGIN:VTODO");
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("Content-Type")?.includes("text/calendar"), true);
+    assert.equal(body.includes("BEGIN:VTODO"), true);
   });
 });
 

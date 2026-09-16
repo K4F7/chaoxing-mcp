@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import assert from "node:assert/strict";
+import { describe, test } from "node:test";
 
 import {
   checkChaoxingAuth,
@@ -16,9 +17,9 @@ describe("chaoxing auth detection", () => {
       },
     });
 
-    expect(called).toBe(false);
-    expect(result.authenticated).toBe(false);
-    expect(result.failureReason).toBe("missing CHAOXING_COOKIE");
+    assert.equal(called, false);
+    assert.equal(result.authenticated, false);
+    assert.equal(result.failureReason, "missing CHAOXING_COOKIE");
   });
 
   test("detects chaoxing login page signals", () => {
@@ -28,9 +29,9 @@ describe("chaoxing auth detection", () => {
       html,
     );
 
-    expect(signals.hasPassportLoginUrl).toBe(true);
-    expect(signals.hasLoginTitle).toBe(true);
-    expect(signals.hasLoginButton).toBe(true);
+    assert.equal(signals.hasPassportLoginUrl, true);
+    assert.equal(signals.hasLoginTitle, true);
+    assert.equal(signals.hasLoginButton, true);
   });
 
   test("treats rendered login page as unauthenticated", async () => {
@@ -42,9 +43,9 @@ describe("chaoxing auth detection", () => {
         }),
     });
 
-    expect(result.authenticated).toBe(false);
-    expect(result.failureReason).toBe("redirected_or_rendered_login_page");
-    expect(JSON.stringify(result)).not.toContain("UID=expired");
+    assert.equal(result.authenticated, false);
+    assert.equal(result.failureReason, "redirected_or_rendered_login_page");
+    assert.equal(JSON.stringify(result).includes("UID=expired"), false);
   });
 
   test("accepts a likely logged-in personal space page", async () => {
@@ -56,12 +57,12 @@ describe("chaoxing auth detection", () => {
         }),
     });
 
-    expect(result.authenticated).toBe(true);
-    expect(result.title).toBe("学习通");
-    expect(result.features.hasLikelySpaceText).toBe(true);
-    expect(result.features.hasCourseText).toBe(true);
-    expect(result.features.hasInboxText).toBe(true);
-    expect(JSON.stringify(result)).not.toContain("UID=valid");
+    assert.equal(result.authenticated, true);
+    assert.equal(result.title, "学习通");
+    assert.equal(result.features.hasLikelySpaceText, true);
+    assert.equal(result.features.hasCourseText, true);
+    assert.equal(result.features.hasInboxText, true);
+    assert.equal(JSON.stringify(result).includes("UID=valid"), false);
   });
 
   test("does not follow non-chaoxing redirects with cookies", async () => {
@@ -81,15 +82,15 @@ describe("chaoxing auth detection", () => {
       },
     });
 
-    expect(result.authenticated).toBe(false);
-    expect(result.failureReason).toBe("untrusted_redirect_target");
-    expect(calls).toEqual([
+    assert.equal(result.authenticated, false);
+    assert.equal(result.failureReason, "untrusted_redirect_target");
+    assert.deepEqual(calls, [
       {
         url: "https://i.chaoxing.com/base?ws=1&t=1780231212848",
         cookie: "UID=secret",
       },
     ]);
-    expect(JSON.stringify(result)).not.toContain("UID=secret");
+    assert.equal(JSON.stringify(result).includes("UID=secret"), false);
   });
 
   test("follows chaoxing redirects with cookies", async () => {
@@ -117,8 +118,8 @@ describe("chaoxing auth detection", () => {
       },
     });
 
-    expect(result.authenticated).toBe(true);
-    expect(calls).toEqual([
+    assert.equal(result.authenticated, true);
+    assert.deepEqual(calls, [
       {
         url: "https://i.chaoxing.com/base?ws=1&t=1780231212848",
         cookie: "UID=valid",
@@ -131,7 +132,8 @@ describe("chaoxing auth detection", () => {
   });
 
   test("extracts and normalizes page title", () => {
-    expect(extractPageTitle("<title> 学习通 &amp; 个人空间 </title>")).toBe(
+    assert.equal(
+      extractPageTitle("<title> 学习通 &amp; 个人空间 </title>"),
       "学习通 & 个人空间",
     );
   });

@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import assert from "node:assert/strict";
+import { describe, test } from "node:test";
 
 import {
   collectUniqueWorkLinks,
@@ -10,7 +11,7 @@ import {
 
 describe("assignment processor", () => {
   test("detects assignment related inbox messages", () => {
-    expect(
+    assert.equal(
       isAssignmentOrExamRelated({
         id: "1",
         uuid: null,
@@ -22,7 +23,8 @@ describe("assignment processor", () => {
         detailUrl: null,
         sendTag: 0,
       }),
-    ).toBe(true);
+      true,
+    );
   });
 
   test("extracts unique work links from detail summaries", () => {
@@ -42,7 +44,7 @@ describe("assignment processor", () => {
       decodedAttachments: [],
     } satisfies DetailSummary;
 
-    expect([...collectUniqueWorkLinks([summary]).keys()]).toEqual([
+    assert.deepEqual([...collectUniqueWorkLinks([summary]).keys()], [
       "https://mooc1.chaoxing.com/work?workOrExam=work&workId=1",
       "https://mooc1.chaoxing.com/exam?workOrExam=exam&examId=2",
     ]);
@@ -64,7 +66,7 @@ describe("assignment processor", () => {
       decodedAttachments: [],
     } satisfies DetailSummary;
 
-    expect([...collectUniqueWorkLinks([summary]).keys()]).toEqual([
+    assert.deepEqual([...collectUniqueWorkLinks([summary]).keys()], [
       "https://mooc1.chaoxing.com/work?workOrExam=work&workId=1",
     ]);
   });
@@ -102,7 +104,7 @@ describe("assignment processor", () => {
       },
     });
 
-    expect(summary.assignmentLinks).toEqual([
+    assert.deepEqual(summary.assignmentLinks, [
       "https://mooc1.chaoxing.com/work?workOrExam=work&workId=1",
     ]);
   });
@@ -174,17 +176,17 @@ describe("assignment processor", () => {
       requirementsLimit: 5,
     });
 
-    expect(result.inbox).toEqual({
+    assert.deepEqual(result.inbox, {
       fetched: 1,
       relevant: 1,
       inspectedDetails: 1,
     });
-    expect(result.totalUniqueActivityLinks).toBe(1);
-    expect(result.totalUniqueWorkLinks).toBe(1);
-    expect(result.fetchedRequirements).toBe(1);
-    expect(result.failedRequirements).toEqual([]);
-    expect(result.requirements[0].workId).toBe("1");
-    expect(calls).toContain("https://notice.chaoxing.com/pc/notice/getNoticeList");
+    assert.equal(result.totalUniqueActivityLinks, 1);
+    assert.equal(result.totalUniqueWorkLinks, 1);
+    assert.equal(result.fetchedRequirements, 1);
+    assert.deepEqual(result.failedRequirements, []);
+    assert.equal(result.requirements[0]?.workId, "1");
+    assert.equal(calls.includes("https://notice.chaoxing.com/pc/notice/getNoticeList"), true);
   });
 
   test("does not send cookies to malicious assignment links from notices", async () => {
@@ -253,15 +255,16 @@ describe("assignment processor", () => {
       requirementsLimit: 5,
     });
 
-    expect(result.totalUniqueWorkLinks).toBe(0);
-    expect(result.fetchedRequirements).toBe(0);
-    expect(calls.some((call) => call.url.startsWith("https://evil.example"))).toBe(false);
-    expect(
+    assert.equal(result.totalUniqueWorkLinks, 0);
+    assert.equal(result.fetchedRequirements, 0);
+    assert.equal(calls.some((call) => call.url.startsWith("https://evil.example")), false);
+    assert.equal(
       calls.some(
         (call) =>
           call.url.startsWith("https://evil.example") &&
           call.cookie === "UID=secret",
       ),
-    ).toBe(false);
+      false,
+    );
   });
 });
