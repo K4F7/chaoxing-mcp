@@ -109,10 +109,12 @@ npm run login --silent -- -u <账号>
 
 行为：
 
-1. CLI / MCP 有账密 → 先 HTTP `fanyalogin`（URL 信任分级）
-2. HTTP 失败（验证码、风控、错误口令等）→ Playwright 填 passport（无 `DISPLAY` 时 `headless: true`，有显示时有界面）
+1. CLI / MCP 有账密 → 先 HTTP `fanyalogin`（URL 信任分级）。`status:true` 之后仍须带着 cookie 跟随返回的 `url`（或 `https://i.chaoxing.com`）完成 i 站 SSO，再 GET `https://i.chaoxing.com/base`（AUTH_PROBE）。探针仍是登录页则视为会话未建立，不写钥匙串，错误须说清（session incomplete / SSO failed），以便 Playwright 回退。
+2. HTTP 失败（验证码、风控、2FA、SSO 未完成、错误口令等）→ Playwright 填 passport（无 `DISPLAY` 时 `headless: true`，有显示时有界面）
 3. 仍失败且 MCP 有 `DISPLAY` → 回退交互登录窗
 4. 仍失败且无 `DISPLAY` → `auth_expired`（MCP）或 CLI 非零退出，错误说明直登失败且无法弹窗
+
+`LOGIN_OK has_cookie=true` 表示 AUTH_PROBE 已通过（不是仅 passport `Set-Cookie`）。MCP 从不接收密码。
 
 可选：先在有桌面的机器登录一次写入钥匙串；之后同一钥匙串在无头环境可读时，查询可不再弹窗。
 
