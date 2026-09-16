@@ -1,12 +1,27 @@
 import { createCipheriv } from "node:crypto";
 
 import type { WritableCredentialStore } from "./credentials";
-import { isTrustedChaoxingUrl } from "./http";
+import {
+  fetchTrustedChaoxing,
+  isTrustedChaoxingUrl,
+  readSetCookieHeaders,
+  type FetchLike,
+  type TrustedFetchResult,
+} from "./http";
+import { AUTH_PROBE_URL, looksLikeLoginPage } from "./login-page";
 
 export const FANYA_LOGIN_URL = "https://passport2.chaoxing.com/fanyalogin";
 
 const PASSPORT_LOGIN_PAGE_URL =
   "https://passport2.chaoxing.com/login?fid=&refer=https%3A%2F%2Fi.chaoxing.com";
+
+const I_CHAOXING_HOME = "https://i.chaoxing.com";
+
+const LOGIN_USER_AGENT =
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+
+const SESSION_INCOMPLETE_MESSAGE =
+  "Password login (账密直登) failed: session incomplete / SSO failed";
 
 // Public client-side obfuscation key from passport2 login.js (not a secret).
 const PASSPORT_AES_KEY = "u2oh6Vu^HWe4_AES";
@@ -26,10 +41,7 @@ export type PasswordLoginRunner = {
   loginWithPassword(credentials: PasswordCredentials): Promise<void>;
 };
 
-export type LoginFetch = (
-  input: string,
-  init?: RequestInit,
-) => Promise<Pick<Response, "status" | "url" | "headers" | "text">>;
+export type LoginFetch = FetchLike;
 
 export function envPasswordCredentialSource(
   env: NodeJS.ProcessEnv = process.env,
@@ -128,8 +140,7 @@ export function createHttpPasswordLogin(
           origin: "https://passport2.chaoxing.com",
           referer: PASSPORT_LOGIN_PAGE_URL,
           "x-requested-with": "XMLHttpRequest",
-          "user-agent":
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+          "user-agent": LOGIN_USER_AGENT,
         },
         body: encodeForm({
           fid: "-1",
@@ -174,13 +185,75 @@ export function createHttpPasswordLogin(
         throw new Error(describeFanyaLoginFailure(safeBody, msg2Hint));
       }
 
-      const cookie = cookieHeaderFromSetCookie(readSetCookies(response.headers));
+      const jar = cookieJarFromSetCookie(
+        readSetCookieHeaders(response.headers),
+      );
+      let cookie = headerFromJar(jar);
       if (cookie == null) {
         throw new Error(
           "Password login (账密直登) failed: login succeeded but no session cookie was returned",
         );
       }
-      await credentials.setCookie(cookie);
+
+      const followUrl = followUrlFromFanya(parsed);
+      try {
+        const followed = await fetchTrustedChaoxing(
+          fetchImpl,
+          {
+            url: followUrl,
+            cookie,
+            headers: {
+              accept:
+                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              "user-agent": LOGIN_USER_AGENT,
+            },
+          },
+          { mergeSetCookie: mergeCookieHeader },
+        );
+        if (followed.cookie.length > 0) {
+          cookie = followed.cookie;
+        }
+      } catch (error) {
+        throw new Error(SESSION_INCOMPLETE_MESSAGE, { cause: error });
+      }
+
+      let probe: TrustedFetchResult;
+      try {
+        probe = await fetchTrustedChaoxing(
+          fetchImpl,
+          {
+            url: AUTH_PROBE_URL,
+            cookie,
+            headers: {
+              accept:
+                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              "user-agent": LOGIN_USER_AGENT,
+            },
+          },
+          { mergeSetCookie: mergeCookieHeader },
+        );
+      } catch (error) {
+        throw new Error(SESSION_INCOMPLETE_MESSAGE, { cause: error });
+      }
+      if (probe.cookie.length > 0) {
+        cookie = probe.cookie;
+      }
+      if (looksLikeLoginPage(probe.url, probe.body)) {
+        throw new Error(
+          `${SESSION_INCOMPLETE_MESSAGE}; AUTH_PROBE still looks like a login page`,
+        );
+      }
+      if (probe.statusCode < 200 || probe.statusCode >= 300) {
+        throw new Error(
+          `${SESSION_INCOMPLETE_MESSAGE}; AUTH_PROBE HTTP ${String(probe.statusCode)}`,
+        );
+      }
+
+      const stored = headerFromJar(cookieJarFromHeader(cookie));
+      if (stored == null) {
+        throw new Error(SESSION_INCOMPLETE_MESSAGE);
+      }
+      await credentials.setCookie(stored);
     },
   };
 }
@@ -189,7 +262,15 @@ type FanyaLoginJson = {
   status?: unknown;
   msg2?: unknown;
   containTwoFactorLogin?: unknown;
+  url?: unknown;
 };
+
+function followUrlFromFanya(parsed: FanyaLoginJson): string {
+  if (typeof parsed.url === "string" && isTrustedChaoxingUrl(parsed.url)) {
+    return parsed.url;
+  }
+  return I_CHAOXING_HOME;
+}
 
 function parseFanyaLoginJson(body: string): FanyaLoginJson | null {
   try {
@@ -226,30 +307,31 @@ function encodeForm(form: Record<string, string>): string {
   return params.toString();
 }
 
-function readSetCookies(headers: Pick<Headers, "get">): string[] {
-  const withGetSetCookie = headers as Pick<Headers, "get"> & {
-    getSetCookie?: () => string[];
-  };
-  if (typeof withGetSetCookie.getSetCookie === "function") {
-    return withGetSetCookie.getSetCookie();
-  }
-  // Node < 18.14 / undici without getSetCookie collapses multiple Set-Cookie
-  // headers; Expires commas make safe splitting unreliable. Require getSetCookie.
-  const combined = headers.get("set-cookie");
-  if (combined == null || combined.trim() === "") {
-    return [];
-  }
-  // Single cookie responses still work; multi-cookie needs getSetCookie.
-  if (!combined.includes(",")) {
-    return [combined];
-  }
-  // Heuristic: split on ", <cookie-name>=" patterns typical of collapsed headers.
-  const parts = combined.split(/,(?=\s*[^;=,]+=)/);
-  return parts.map((part) => part.trim()).filter((part) => part.length > 0);
+type CookieJar = Map<string, string>;
+
+function cookieJarFromSetCookie(setCookies: string[]): CookieJar {
+  const jar: CookieJar = new Map();
+  applySetCookies(jar, setCookies);
+  return jar;
 }
 
-function cookieHeaderFromSetCookie(setCookies: string[]): string | null {
-  const parts: { name: string; value: string }[] = [];
+function cookieJarFromHeader(header: string): CookieJar {
+  const jar: CookieJar = new Map();
+  if (header.trim() === "") {
+    return jar;
+  }
+  for (const part of header.split(";")) {
+    const trimmed = part.trim();
+    const eq = trimmed.indexOf("=");
+    if (eq <= 0) {
+      continue;
+    }
+    jar.set(trimmed.slice(0, eq).trim(), trimmed.slice(eq + 1));
+  }
+  return jar;
+}
+
+function applySetCookies(jar: CookieJar, setCookies: string[]): void {
   for (const raw of setCookies) {
     const first = raw.split(";")[0]?.trim() ?? "";
     const eq = first.indexOf("=");
@@ -258,24 +340,41 @@ function cookieHeaderFromSetCookie(setCookies: string[]): string | null {
     }
     const name = first.slice(0, eq).trim();
     const value = first.slice(eq + 1);
-    if (name.length === 0 || /(?:^|;\s*)max-age=0\b/i.test(raw)) {
+    if (name.length === 0) {
       continue;
     }
     const domain = cookieAttribute(raw, "domain");
     if (domain != null && !/(^|\.)chaoxing\.com$/i.test(domain)) {
       continue;
     }
-    parts.push({ name, value });
+    if (/(?:^|;\s*)max-age=0\b/i.test(raw)) {
+      jar.delete(name);
+      continue;
+    }
+    jar.set(name, value);
   }
+}
+
+function serializeJar(jar: CookieJar): string {
+  return [...jar.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, value]) => `${name}=${value}`)
+    .join("; ");
+}
+
+function headerFromJar(jar: CookieJar): string | null {
   if (
-    !parts.some((part) => SESSION_COOKIE_NAMES.has(part.name.toLowerCase()))
+    ![...jar.keys()].some((name) => SESSION_COOKIE_NAMES.has(name.toLowerCase()))
   ) {
     return null;
   }
-  return parts
-    .sort((left, right) => left.name.localeCompare(right.name))
-    .map((part) => `${part.name}=${part.value}`)
-    .join("; ");
+  return serializeJar(jar);
+}
+
+function mergeCookieHeader(cookie: string, setCookies: string[]): string {
+  const jar = cookieJarFromHeader(cookie);
+  applySetCookies(jar, setCookies);
+  return serializeJar(jar);
 }
 
 function cookieAttribute(raw: string, name: string): string | null {

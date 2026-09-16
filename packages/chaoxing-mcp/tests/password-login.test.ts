@@ -226,6 +226,11 @@ describe("createHttpPasswordLogin", () => {
     username: "alice",
     password: "s3cret-value",
   };
+  const I_CHAOXING_HOME = "https://i.chaoxing.com";
+  const HOME_HTML = "<title>个人空间</title>";
+  const LOGIN_HTML = "<title>用户登录</title>";
+  const PASSPORT_LOGIN_URL =
+    "https://passport2.chaoxing.com/login?fid=&refer=https%3A%2F%2Fi.chaoxing.com";
 
   function memoryStore(): WritableCredentialStore & { cookie: string | null } {
     return {
@@ -239,30 +244,225 @@ describe("createHttpPasswordLogin", () => {
     };
   }
 
+  function fanyaSuccessResponse(url?: string): Response {
+    const headers = new Headers();
+    headers.append("set-cookie", "UID=1; Domain=.chaoxing.com; Path=/");
+    headers.append("set-cookie", "vc3=abc; Domain=.chaoxing.com; Path=/");
+    const payload =
+      url === undefined
+        ? { status: true }
+        : { status: true, url };
+    return new Response(JSON.stringify(payload), { status: 200, headers });
+  }
+
+  function htmlResponse(
+    url: string,
+    body: string,
+    setCookies: string[] = [],
+  ): Pick<Response, "status" | "url" | "headers" | "text"> {
+    const headers = new Headers();
+    for (const cookie of setCookies) {
+      headers.append("set-cookie", cookie);
+    }
+    return {
+      status: 200,
+      url,
+      headers,
+      text: async () => body,
+    };
+  }
+
   test("fake fetch success writes session cookie and does not POST plaintext password", async () => {
     const store = memoryStore();
-    const calls: { url: string; body: string }[] = [];
+    const calls: { url: string; method: string; body: string }[] = [];
     const login = createHttpPasswordLogin(store, {
       fetchImpl: async (url, init) => {
-        calls.push({ url, body: String(init?.body ?? "") });
-        const headers = new Headers();
-        headers.append("set-cookie", "UID=1; Domain=.chaoxing.com; Path=/");
-        headers.append("set-cookie", "vc3=abc; Domain=.chaoxing.com; Path=/");
-        return new Response(JSON.stringify({ status: true, url: "https://i.chaoxing.com" }), {
-          status: 200,
-          headers,
-        });
+        const method = String(init?.method ?? "GET").toUpperCase();
+        calls.push({ url, method, body: String(init?.body ?? "") });
+        if (url === FANYA_LOGIN_URL) {
+          return fanyaSuccessResponse(I_CHAOXING_HOME);
+        }
+        return htmlResponse(url, HOME_HTML);
       },
     });
 
     await login.loginWithPassword(creds);
 
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0]?.url, FANYA_LOGIN_URL);
-    assert.doesNotMatch(calls[0]?.body ?? "", /s3cret-value/);
-    assert.match(calls[0]?.body ?? "", /uname=/);
-    assert.match(calls[0]?.body ?? "", /password=/);
+    const fanya = calls.find((call) => call.url === FANYA_LOGIN_URL);
+    assert.ok(fanya);
+    assert.equal(fanya.method, "POST");
+    assert.doesNotMatch(fanya.body, /s3cret-value/);
+    assert.match(fanya.body, /uname=/);
+    assert.match(fanya.body, /password=/);
+    assert.equal(
+      calls.some((call) => call.url === I_CHAOXING_HOME && call.method === "GET"),
+      true,
+    );
+    assert.equal(
+      calls.some((call) => call.url === AUTH_PROBE_URL),
+      true,
+    );
     assert.equal(store.cookie, "UID=1; vc3=abc");
+  });
+
+  test("fanya success still throws and does not setCookie when AUTH_PROBE is a login page", async () => {
+    const store = memoryStore();
+    const login = createHttpPasswordLogin(store, {
+      fetchImpl: async (url) => {
+        if (url === FANYA_LOGIN_URL) {
+          return fanyaSuccessResponse(I_CHAOXING_HOME);
+        }
+        return htmlResponse(PASSPORT_LOGIN_URL, LOGIN_HTML);
+      },
+    });
+
+    await assert.rejects(
+      () => login.loginWithPassword(creds),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /session incomplete|SSO/i);
+        assert.doesNotMatch(error.message, /s3cret-value/);
+        return true;
+      },
+    );
+    assert.equal(store.cookie, null);
+  });
+
+  test("fanya success follows url and sets cookie only after AUTH_PROBE is not a login page", async () => {
+    const store = memoryStore();
+    const cookieHeaders: { url: string; cookie: string | null }[] = [];
+    const login = createHttpPasswordLogin(store, {
+      fetchImpl: async (url, init) => {
+        cookieHeaders.push({
+          url,
+          cookie: new Headers(init?.headers).get("cookie"),
+        });
+        if (url === FANYA_LOGIN_URL) {
+          return fanyaSuccessResponse(I_CHAOXING_HOME);
+        }
+        if (url === I_CHAOXING_HOME) {
+          return htmlResponse(url, "<html></html>", [
+            "uf=sso; Domain=.chaoxing.com; Path=/",
+          ]);
+        }
+        if (url === AUTH_PROBE_URL) {
+          return htmlResponse(AUTH_PROBE_URL, HOME_HTML);
+        }
+        throw new Error("unexpected url");
+      },
+    });
+
+    await login.loginWithPassword(creds);
+
+    const follow = cookieHeaders.find((call) => call.url === I_CHAOXING_HOME);
+    assert.ok(follow?.cookie);
+    assert.match(follow.cookie, /UID=1/);
+    assert.match(follow.cookie, /vc3=abc/);
+    const probe = cookieHeaders.find((call) => call.url === AUTH_PROBE_URL);
+    assert.ok(probe?.cookie);
+    assert.match(probe.cookie, /UID=1/);
+    assert.match(probe.cookie, /vc3=abc/);
+    assert.match(probe.cookie, /uf=sso/);
+    assert.ok(store.cookie);
+    assert.match(store.cookie, /UID=1/);
+    assert.match(store.cookie, /vc3=abc/);
+    assert.match(store.cookie, /uf=sso/);
+  });
+
+  test("merges Set-Cookie from a trusted SSO 302 hop into AUTH_PROBE Cookie", async () => {
+    const store = memoryStore();
+    const ssoUrl = "https://passport2.chaoxing.com/sso";
+    const cookieHeaders: { url: string; cookie: string | null }[] = [];
+    const login = createHttpPasswordLogin(store, {
+      fetchImpl: async (url, init) => {
+        cookieHeaders.push({
+          url,
+          cookie: new Headers(init?.headers).get("cookie"),
+        });
+        if (url === FANYA_LOGIN_URL) {
+          return fanyaSuccessResponse(I_CHAOXING_HOME);
+        }
+        if (url === I_CHAOXING_HOME) {
+          const headers = new Headers();
+          headers.set("location", ssoUrl);
+          headers.append("set-cookie", "uf=sso; Domain=.chaoxing.com; Path=/");
+          return {
+            status: 302,
+            url,
+            headers,
+            text: async () => "",
+          };
+        }
+        if (url === ssoUrl) {
+          return htmlResponse(ssoUrl, "<html></html>");
+        }
+        if (url === AUTH_PROBE_URL) {
+          return htmlResponse(AUTH_PROBE_URL, HOME_HTML);
+        }
+        throw new Error("unexpected url");
+      },
+    });
+
+    await login.loginWithPassword(creds);
+
+    const sso = cookieHeaders.find((call) => call.url === ssoUrl);
+    assert.ok(sso?.cookie);
+    assert.match(sso.cookie, /UID=1/);
+    assert.match(sso.cookie, /vc3=abc/);
+    assert.match(sso.cookie, /uf=sso/);
+    const probe = cookieHeaders.find((call) => call.url === AUTH_PROBE_URL);
+    assert.ok(probe?.cookie);
+    assert.match(probe.cookie, /uf=sso/);
+    assert.ok(store.cookie);
+    assert.match(store.cookie, /UID=1/);
+    assert.match(store.cookie, /uf=sso/);
+    assert.match(store.cookie, /vc3=abc/);
+  });
+
+  test("does not fetch an untrusted fanya url; follows i.chaoxing.com instead", async () => {
+    const store = memoryStore();
+    const urls: string[] = [];
+    const login = createHttpPasswordLogin(store, {
+      fetchImpl: async (url) => {
+        urls.push(url);
+        if (url === FANYA_LOGIN_URL) {
+          return fanyaSuccessResponse("https://evil.example/phish");
+        }
+        return htmlResponse(url, HOME_HTML);
+      },
+    });
+
+    await login.loginWithPassword(creds);
+
+    assert.equal(
+      urls.some((url) => url.includes("evil.example")),
+      false,
+    );
+    assert.equal(urls.includes(I_CHAOXING_HOME), true);
+    assert.equal(urls.includes(AUTH_PROBE_URL), true);
+    assert.equal(store.cookie, "UID=1; vc3=abc");
+  });
+
+  test("two-factor JSON body fails clearly without storing a cookie", async () => {
+    const store = memoryStore();
+    const login = createHttpPasswordLogin(store, {
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({ status: true, containTwoFactorLogin: true }),
+          { status: 200 },
+        ),
+    });
+
+    await assert.rejects(
+      () => login.loginWithPassword(creds),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /two-factor/i);
+        assert.doesNotMatch(error.message, /s3cret-value/);
+        return true;
+      },
+    );
+    assert.equal(store.cookie, null);
   });
 
   test("rejects an untrusted login URL without issuing fetch", async () => {
@@ -437,14 +637,22 @@ describe("createPassportOpenLogin HTTP default", () => {
     const openLogin = createPassportOpenLogin(store, {
       env: { CHAOXING_USERNAME: "alice", CHAOXING_PASSWORD: "s3cret-value" },
       platform: "linux",
-      fetchImpl: async () => {
-        const headers = new Headers();
-        headers.append("set-cookie", "UID=1; Domain=.chaoxing.com");
-        headers.append("set-cookie", "vc3=abc; Domain=.chaoxing.com");
-        return new Response(JSON.stringify({ status: true }), {
+      fetchImpl: async (url) => {
+        if (url === FANYA_LOGIN_URL) {
+          const headers = new Headers();
+          headers.append("set-cookie", "UID=1; Domain=.chaoxing.com");
+          headers.append("set-cookie", "vc3=abc; Domain=.chaoxing.com");
+          return new Response(JSON.stringify({ status: true }), {
+            status: 200,
+            headers,
+          });
+        }
+        return {
           status: 200,
-          headers,
-        });
+          url,
+          headers: new Headers(),
+          text: async () => "<title>个人空间</title>",
+        };
       },
     });
 
