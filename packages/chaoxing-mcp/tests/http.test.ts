@@ -123,6 +123,125 @@ describe("cookie-bearing Chaoxing HTTP adapter URL 信任分级", () => {
       [start, next],
     );
   });
+
+  test("upgrades a chaoxing http Location to https before following the redirect", async () => {
+    const start = "https://i.chaoxing.com/base";
+    const httpLocation = "http://i.chaoxing.com/base?ws=1";
+    const upgraded = "https://i.chaoxing.com/base?ws=1";
+    const { calls, fetchImpl } = recordingFetch(async (url) => {
+      if (url === start) {
+        return new Response("", {
+          status: 302,
+          headers: { Location: httpLocation },
+        });
+      }
+      return new Response("homepage", { status: 200 });
+    });
+    const http = createFetchChaoxingHttp(fetchImpl);
+
+    const response = await http.request({ url: start, cookie: COOKIE });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body, "homepage");
+    assert.deepEqual(
+      calls.map((call) => call.url),
+      [start, upgraded],
+    );
+    assert.equal(
+      calls.some((call) => call.url.startsWith("http://")),
+      false,
+    );
+    for (const call of calls) {
+      assert.match(call.url, /^https:\/\//);
+      assert.equal(new Headers(call.init?.headers).get("cookie"), COOKIE);
+    }
+  });
+
+  test("does not follow a redirect to an http off-trust host", async () => {
+    const trusted = "https://i.chaoxing.com/base";
+    const offTrust = "http://evil.com/phish";
+    const { calls, fetchImpl } = recordingFetch(async (url) => {
+      if (url === trusted) {
+        return new Response("", {
+          status: 302,
+          headers: { Location: offTrust },
+        });
+      }
+      return new Response("should not run", { status: 200 });
+    });
+    const http = createFetchChaoxingHttp(fetchImpl);
+
+    await assert.rejects(() => http.request({ url: trusted, cookie: COOKIE }));
+    assert.deepEqual(
+      calls.map((call) => call.url),
+      [trusted],
+    );
+    assert.equal(
+      calls.some((call) => call.url.startsWith("http://")),
+      false,
+    );
+  });
+
+  test("does not follow a redirect to an https off-trust host", async () => {
+    const trusted = "https://i.chaoxing.com/base";
+    const offTrust = "https://evil.com/phish";
+    const { calls, fetchImpl } = recordingFetch(async (url) => {
+      if (url === trusted) {
+        return new Response("", {
+          status: 302,
+          headers: { Location: offTrust },
+        });
+      }
+      return new Response("should not run", { status: 200 });
+    });
+    const http = createFetchChaoxingHttp(fetchImpl);
+
+    await assert.rejects(() => http.request({ url: trusted, cookie: COOKIE }));
+    assert.deepEqual(
+      calls.map((call) => call.url),
+      [trusted],
+    );
+  });
+
+  test("does not follow a redirect with a javascript Location", async () => {
+    const trusted = "https://i.chaoxing.com/base";
+    const { calls, fetchImpl } = recordingFetch(async (url) => {
+      if (url === trusted) {
+        return new Response("", {
+          status: 302,
+          headers: { Location: "javascript:alert(1)" },
+        });
+      }
+      return new Response("should not run", { status: 200 });
+    });
+    const http = createFetchChaoxingHttp(fetchImpl);
+
+    await assert.rejects(() => http.request({ url: trusted, cookie: COOKIE }));
+    assert.deepEqual(
+      calls.map((call) => call.url),
+      [trusted],
+    );
+  });
+
+  test("does not follow a redirect with an ftp Location on a chaoxing host", async () => {
+    const trusted = "https://i.chaoxing.com/base";
+    const { calls, fetchImpl } = recordingFetch(async (url) => {
+      if (url === trusted) {
+        return new Response("", {
+          status: 302,
+          headers: { Location: "ftp://i.chaoxing.com/" },
+        });
+      }
+      return new Response("should not run", { status: 200 });
+    });
+    const http = createFetchChaoxingHttp(fetchImpl);
+
+    await assert.rejects(() => http.request({ url: trusted, cookie: COOKIE }));
+    assert.deepEqual(
+      calls.map((call) => call.url),
+      [trusted],
+    );
+  });
 });
 
 describe("cookie-bearing Chaoxing HTTP adapter POST / form", () => {
