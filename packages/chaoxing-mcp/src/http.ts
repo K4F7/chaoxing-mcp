@@ -56,7 +56,15 @@ export function createFetchChaoxingHttp(
         }
         let nextUrl: string;
         try {
-          nextUrl = new URL(location, currentUrl).toString();
+          const parsed = new URL(location, currentUrl);
+          if (
+            parsed.protocol === "http:" &&
+            (parsed.hostname === "chaoxing.com" ||
+              parsed.hostname.endsWith(".chaoxing.com"))
+          ) {
+            parsed.protocol = "https:";
+          }
+          nextUrl = parsed.toString();
         } catch {
           throw new Error("invalid_redirect_location");
         }
