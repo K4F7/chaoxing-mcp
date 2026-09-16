@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import assert from "node:assert/strict";
+import { describe, test } from "node:test";
 
 import { buildCalendarIcs, buildSyncItems, buildTodoIcs } from "../src/sync";
 import type { AssignmentRequirement } from "../src/requirements";
@@ -17,15 +18,12 @@ describe("sync exports", () => {
       { generatedAt: new Date("2026-06-01T00:00:00Z") },
     );
 
-    expect(items).toEqual([
-      expect.objectContaining({
-        id: "assignment-123",
-        kind: "assignment",
-        title: "作业通知",
-        startAt: "2026-05-31T04:00:00.000Z",
-        dueAt: "2026-06-05T15:59:00.000Z",
-      }),
-    ]);
+    assert.equal(items.length, 1);
+    assert.equal(items[0]?.id, "assignment-123");
+    assert.equal(items[0]?.kind, "assignment");
+    assert.equal(items[0]?.title, "作业通知");
+    assert.equal(items[0]?.startAt, "2026-05-31T04:00:00.000Z");
+    assert.equal(items[0]?.dueAt, "2026-06-05T15:59:00.000Z");
   });
 
   test("builds calendar and todo ics output", () => {
@@ -48,10 +46,10 @@ describe("sync exports", () => {
       generatedAt: new Date("2026-06-01T00:00:00Z"),
     });
 
-    expect(calendar).toContain("BEGIN:VEVENT");
-    expect(calendar).toContain("SUMMARY:考试截止");
-    expect(todos).toContain("BEGIN:VTODO");
-    expect(todos).toContain("DUE:20260601T020000Z");
+    assert.equal(calendar.includes("BEGIN:VEVENT"), true);
+    assert.equal(calendar.includes("SUMMARY:考试截止"), true);
+    assert.equal(todos.includes("BEGIN:VTODO"), true);
+    assert.equal(todos.includes("DUE:20260601T020000Z"), true);
   });
 });
 

@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import assert from "node:assert/strict";
+import { describe, test } from "node:test";
 
 import { extractQuestions, parseAssignmentRequirement } from "../src/requirements";
 
@@ -11,7 +12,7 @@ describe("assignment requirements", () => {
 </div>
 `);
 
-    expect(questions).toEqual([
+    assert.deepEqual(questions, [
       {
         id: "1",
         number: "1",
@@ -40,9 +41,9 @@ describe("assignment requirements", () => {
       sourceContent: null,
     });
 
-    expect(parsed.workStatus).toBe("answering");
-    expect(parsed.workId).toBe("123");
-    expect(parsed.answerId).toBe("456");
-    expect(parsed.timeWindow).toEqual({ start: "05-31 12:00", end: "06-05 23:59" });
+    assert.equal(parsed.workStatus, "answering");
+    assert.equal(parsed.workId, "123");
+    assert.equal(parsed.answerId, "456");
+    assert.deepEqual(parsed.timeWindow, { start: "05-31 12:00", end: "06-05 23:59" });
   });
 });

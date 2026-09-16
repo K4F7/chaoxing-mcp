@@ -4,24 +4,25 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "auth:check": "bun run scripts/auth-check.ts",
-    "auth:login": "bun run scripts/auth-login.ts",
-    "google:login": "bun run scripts/google-login.ts",
-    "assignments:requirements": "bun run scripts/assignment-requirements.ts",
-    "inbox:details": "bun run scripts/inbox-details.ts",
-    "inbox:fetch": "bun run scripts/inbox-fetch.ts",
-    "inbox:probe": "bun run scripts/probe-inbox.ts",
-    "start": "bun run scripts/start.ts",
+    "auth:check": "node --import tsx scripts/auth-check.ts",
+    "auth:login": "node --import tsx scripts/auth-login.ts",
+    "google:login": "node --import tsx scripts/google-login.ts",
+    "assignments:requirements": "node --import tsx scripts/assignment-requirements.ts",
+    "inbox:details": "node --import tsx scripts/inbox-details.ts",
+    "inbox:fetch": "node --import tsx scripts/inbox-fetch.ts",
+    "inbox:probe": "node --import tsx scripts/probe-inbox.ts",
+    "start": "node --import tsx scripts/start.ts",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "types": "wrangler types",
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
-    "check": "bun run typecheck && bun test"
+    "test": "tsx --test tests/*.test.ts",
+    "check": "npm run typecheck && npm test"
   },
   "devDependencies": {
-    "@types/bun": "1.3.14",
+    "@types/node": "22.18.0",
     "playwright-core": "1.60.0",
+    "tsx": "4.20.5",
     "typescript": "5.9.3",
     "wrangler": "4.95.0"
   }

@@ -5,8 +5,8 @@ await applyDevVars();
 
 try {
   const result = await checkChaoxingAuth({
-    cookie: Bun.env.CHAOXING_COOKIE,
-    homeUrl: Bun.env.CHAOXING_HOME_URL,
+    cookie: process.env.CHAOXING_COOKIE,
+    homeUrl: process.env.CHAOXING_HOME_URL,
   });
 
   console.log(JSON.stringify(result, null, 2));

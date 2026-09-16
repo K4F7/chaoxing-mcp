@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from "node:fs/promises";
+
 import { DEFAULT_CHAOXING_HOME_URL } from "../src/auth";
 import { applyDevVars } from "../src/dev-vars";
 
@@ -7,17 +9,17 @@ const INBOX_HTML_PATH = `${OUTPUT_DIR}/inbox.html`;
 
 await applyDevVars();
 
-const cookie = Bun.env.CHAOXING_COOKIE;
+const cookie = process.env.CHAOXING_COOKIE;
 if (!cookie) {
   throw new Error("missing CHAOXING_COOKIE");
 }
 const cookieHeader = cookie;
 
-await Bun.$`mkdir -p ${OUTPUT_DIR}`;
+await mkdir(OUTPUT_DIR, { recursive: true });
 
-const homeUrl = Bun.env.CHAOXING_HOME_URL || DEFAULT_CHAOXING_HOME_URL;
+const homeUrl = process.env.CHAOXING_HOME_URL || DEFAULT_CHAOXING_HOME_URL;
 const home = await fetchText(homeUrl, homeUrl);
-await Bun.write(HOME_HTML_PATH, home.text);
+await writeFile(HOME_HTML_PATH, home.text);
 
 const inboxUrl = findInboxUrl(home.text, home.finalUrl);
 if (!inboxUrl) {
@@ -36,7 +38,7 @@ if (!inboxUrl) {
 }
 
 const inbox = await fetchText(inboxUrl, home.finalUrl);
-await Bun.write(INBOX_HTML_PATH, inbox.text);
+await writeFile(INBOX_HTML_PATH, inbox.text);
 
 console.log(
   JSON.stringify(

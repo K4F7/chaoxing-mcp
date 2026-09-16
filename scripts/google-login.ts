@@ -1,4 +1,7 @@
-import { spawn } from "bun";
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { createServer } from "node:http";
 
 import { applyDevVars, upsertDevVar } from "../src/dev-vars";
 
@@ -71,22 +74,22 @@ async function readOAuthClient(): Promise<{
   clientId: string;
   clientSecret: string;
 }> {
-  const clientId = Bun.env.GOOGLE_OAUTH_CLIENT_ID?.trim();
-  const clientSecret = Bun.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim();
+  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID?.trim();
+  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim();
   if (clientId && clientSecret) {
     return { clientId, clientSecret };
   }
 
-  const path = Bun.argv.find((arg) => arg.startsWith("--client="))?.split("=")[1] ||
+  const path =
+    process.argv.find((arg) => arg.startsWith("--client="))?.split("=")[1] ||
     "google-oauth-client.json";
-  const file = Bun.file(path);
-  if (!(await file.exists())) {
+  if (!existsSync(path)) {
     throw new Error(
       `missing_google_oauth_client: set GOOGLE_OAUTH_CLIENT_ID/GOOGLE_OAUTH_CLIENT_SECRET or save OAuth client JSON as ${path}`,
     );
   }
 
-  const data = JSON.parse(await file.text()) as {
+  const data = JSON.parse(await readFile(path, "utf8")) as {
     installed?: {
       client_id?: string;
       client_secret?: string;
@@ -109,61 +112,66 @@ async function readOAuthClient(): Promise<{
 
 async function waitForAuthorizationCode(expectedState: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const server = Bun.serve({
-      hostname: LOOPBACK_HOST,
-      port: LOOPBACK_PORT,
-      fetch(request) {
-        const url = new URL(request.url);
-        if (url.pathname !== "/oauth2callback") {
-          return new Response("not found", { status: 404 });
-        }
+    const server = createServer((req, res) => {
+      const url = new URL(
+        req.url ?? "/",
+        `http://${LOOPBACK_HOST}:${LOOPBACK_PORT}`,
+      );
+      if (url.pathname !== "/oauth2callback") {
+        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end("not found");
+        return;
+      }
 
-        const error = url.searchParams.get("error");
-        const state = url.searchParams.get("state");
-        const code = url.searchParams.get("code");
+      const error = url.searchParams.get("error");
+      const state = url.searchParams.get("state");
+      const code = url.searchParams.get("code");
 
-        queueMicrotask(() => server.stop(true));
+      const finish = (status: number, message: string) => {
+        res.writeHead(status, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(
+          `<!doctype html><meta charset="utf-8"><title>Google Calendar</title><p>${message}</p>`,
+          () => {
+            server.close();
+            server.closeAllConnections();
+          },
+        );
+      };
 
-        if (error) {
-          reject(new Error(error));
-          return htmlResponse("授权失败，可以关闭这个页面。");
-        }
-        if (state !== expectedState || !code) {
-          reject(new Error("invalid_oauth_callback"));
-          return htmlResponse("授权回调无效，可以关闭这个页面。");
-        }
+      if (error) {
+        finish(400, "授权失败，可以关闭这个页面。");
+        reject(new Error(error));
+        return;
+      }
+      if (state !== expectedState || !code) {
+        finish(400, "授权回调无效，可以关闭这个页面。");
+        reject(new Error("invalid_oauth_callback"));
+        return;
+      }
 
-        resolve(code);
-        return htmlResponse("授权成功，可以回到终端。");
-      },
+      finish(200, "授权成功，可以回到终端。");
+      resolve(code);
     });
 
-    console.log(`等待 Google 回调：${REDIRECT_URI}`);
+    server.on("error", reject);
+    server.listen(LOOPBACK_PORT, LOOPBACK_HOST, () => {
+      console.log(`等待 Google 回调：${REDIRECT_URI}`);
+    });
   });
 }
 
 function openBrowser(url: string): void {
   const command =
     process.platform === "darwin"
-      ? ["open", url]
+      ? (["open", url] as const)
       : process.platform === "win32"
-        ? ["cmd", "/c", "start", url]
-        : ["xdg-open", url];
-  spawn(command, {
-    stdout: "ignore",
-    stderr: "ignore",
-  });
-}
-
-function htmlResponse(message: string): Response {
-  return new Response(
-    `<!doctype html><meta charset="utf-8"><title>Google Calendar</title><p>${message}</p>`,
-    {
-      headers: {
-        "Content-Type": "text/html; charset=utf-8",
-      },
-    },
-  );
+        ? (["cmd", "/c", "start", "", url] as const)
+        : (["xdg-open", url] as const);
+  spawn(command[0], command.slice(1), {
+    stdio: "ignore",
+    detached: true,
+    shell: false,
+  }).unref();
 }
 
 function base64UrlEncode(value: ArrayBuffer | Uint8Array): string {

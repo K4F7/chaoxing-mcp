@@ -5,8 +5,8 @@ await applyDevVars();
 
 const limit = readLimit();
 const result = await fetchInboxMessages({
-  cookie: Bun.env.CHAOXING_COOKIE || "",
-  homeUrl: Bun.env.CHAOXING_HOME_URL,
+  cookie: process.env.CHAOXING_COOKIE || "",
+  homeUrl: process.env.CHAOXING_HOME_URL,
   limit,
 });
 
@@ -22,7 +22,7 @@ console.log(
 );
 
 function readLimit(): number {
-  const value = Bun.argv.find((arg) => arg.startsWith("--limit="))?.split("=")[1];
+  const value = process.argv.find((arg) => arg.startsWith("--limit="))?.split("=")[1];
   const parsed = value ? Number.parseInt(value, 10) : 20;
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 20;
 }

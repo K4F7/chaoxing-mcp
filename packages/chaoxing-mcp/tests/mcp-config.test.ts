@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -24,10 +24,14 @@ const SKIP_DIR_NAMES = new Set([
 ]);
 const SKIP_LOCK_NAMES = new Set([
   "package-lock.json",
-  "bun.lock",
   "pubspec.lock",
   "uv.lock",
 ]);
+const ARCHIVAL_BUN_DOC_PREFIXES = [`docs${sep}superpowers${sep}`];
+const BUN = "bu" + "n";
+const BUN_LOCK = `${BUN}.lock`;
+const TYPES_BUN = `@types/${BUN}`;
+const BUN_REFERENCE = new RegExp(`\\b${BUN}\\b`, "i");
 
 function readJson(relativePath: string): { name: string } {
   return JSON.parse(readFileSync(join(repoRoot, relativePath), "utf8")) as {
@@ -113,6 +117,67 @@ describe("MCP grok config", () => {
       }
     }
     assert.deepEqual(leftovers, []);
+  });
+
+  test("runtime, scripts, and current docs do not depend on Bun", () => {
+    assert.equal(existsSync(join(repoRoot, BUN_LOCK)), false);
+
+    const rootPkg = JSON.parse(
+      readFileSync(join(repoRoot, "package.json"), "utf8"),
+    ) as {
+      scripts: Record<string, string>;
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    assert.equal(TYPES_BUN in (rootPkg.dependencies ?? {}), false);
+    assert.equal(TYPES_BUN in (rootPkg.devDependencies ?? {}), false);
+    for (const [name, command] of Object.entries(rootPkg.scripts)) {
+      assert.equal(
+        command.includes(BUN),
+        false,
+        `${name}: ${command}`,
+      );
+    }
+
+    const tsconfig = JSON.parse(
+      readFileSync(join(repoRoot, "tsconfig.json"), "utf8"),
+    ) as { compilerOptions?: { types?: string[] } };
+    assert.equal((tsconfig.compilerOptions?.types ?? []).includes(BUN), false);
+
+    const leftovers: string[] = [];
+    const files: string[] = [];
+    collectTextFiles(repoRoot, files);
+    for (const file of files) {
+      const relativePath = relative(repoRoot, file);
+      if (ARCHIVAL_BUN_DOC_PREFIXES.some((prefix) => relativePath.startsWith(prefix))) {
+        continue;
+      }
+      if (relativePath === `packages${sep}chaoxing-mcp${sep}tests${sep}mcp-config.test.ts`) {
+        continue;
+      }
+      const text = readFileSync(file, "utf8");
+      if (BUN_REFERENCE.test(text)) {
+        leftovers.push(relativePath);
+      }
+    }
+    assert.deepEqual(leftovers, []);
+
+    const currentDocs = [
+      "README.md",
+      "docs/mcp.md",
+      "docs/agents/domain.md",
+      "docs/agents/issue-tracker.md",
+      "docs/agents/triage-labels.md",
+      "AGENTS.md",
+    ];
+    for (const relativePath of currentDocs) {
+      const text = readFileSync(join(repoRoot, relativePath), "utf8");
+      assert.equal(
+        new RegExp(`\\b${BUN}\\b`, "i").test(text),
+        false,
+        relativePath,
+      );
+    }
   });
 
   test("keeps the existing keychain service and Playwright profile path", () => {
