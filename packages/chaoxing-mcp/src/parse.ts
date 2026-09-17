@@ -23,7 +23,7 @@ export type ParsedInboxNotice = {
   assignmentLike: boolean;
 };
 
-const CLOSED_STATUS = /已提交|已完成|已结束|不可作答/;
+const CLOSED_STATUS = /待批阅|已提交|已完成|已结束|不可作答/;
 const ASSIGNMENT_LIKE = /作业|考试|测验|测试|截止|答题|试卷|练习/;
 
 export function semesterCodeOf(title: string): string | null {

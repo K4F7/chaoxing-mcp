@@ -275,6 +275,14 @@ function fixtureAResponses(): Record<string, FakeHttpResponse> {
           courseId: currentCourse.courseId,
           classId: currentCourse.classId,
         },
+        {
+          id: "2617",
+          title: "新课待批阅",
+          status: "待批阅",
+          due: "2026-09-19 23:59",
+          courseId: currentCourse.courseId,
+          classId: currentCourse.classId,
+        },
       ]),
     ),
     [workListUrl(
@@ -704,7 +712,7 @@ describe("listTodos fixture semester scope", () => {
     assert.equal(fake.openLoginCallCount(), 0);
   });
 
-  test("excludes 已提交 已完成 已结束 不可作答 and keeps 打回重做", async () => {
+  test("excludes 已提交 待批阅 已完成 已结束 不可作答 and keeps 打回重做", async () => {
     const fake = createPorts({
       cookie: VALID_COOKIE,
       httpByUrl: fixtureAResponses(),
@@ -714,6 +722,7 @@ describe("listTodos fixture semester scope", () => {
     const titles = result.todos.map((todo) => todo.title);
 
     assert.equal(titles.includes("新课已交"), false);
+    assert.equal(titles.includes("新课待批阅"), false);
     assert.equal(titles.includes("新课已完成"), false);
     assert.equal(titles.includes("新课已结束"), false);
     assert.equal(titles.includes("新课不可作答"), false);
