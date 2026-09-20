@@ -127,6 +127,48 @@ describe("buildDraftSaveForm", () => {
     assert.equal(fields.questionId, "405823585");
   });
 
+  test("includes enc and session fields from q3-blank while keeping tempSave=true", () => {
+    const fields = buildDraftSaveForm(load("q3-blank.html"), {
+      blanks: ["."],
+    });
+    assert.equal(fields.enc, "ENC_FIXTURE");
+    assert.equal(fields.encWork, "ENC_FIXTURE");
+    assert.equal(fields.courseId, "266240948");
+    assert.equal(fields.classId, "152370813");
+    assert.equal(fields.tempSave, "true");
+  });
+
+  test("merges id-only enc from session when form inputs lack name", () => {
+    const html = `
+      <input type="hidden" id="enc" value="SESSION_ENC"/>
+      <input type="hidden" id="encWork" value="SESSION_ENC_WORK"/>
+      <input type="hidden" id="courseId" value="111"/>
+      <input type="hidden" id="classId" value="222"/>
+      <input type="hidden" id="workRelationId" value="333"/>
+      <input type="hidden" id="workRelationAnswerId" value="444"/>
+      <input type="hidden" id="cpi" value="555"/>
+      <input type="hidden" id="knowledgeid" value="0"/>
+      <form id="submitTest">
+        <input type="hidden" name="tempSave" value="false"/>
+        <input type="hidden" name="questionId" value="99"/>
+        <input type="hidden" name="type99" value="2"/>
+        <input type="hidden" name="blankNum99" value="1,"/>
+        <textarea name="answer991" id="answer991"></textarea>
+      </form>
+      <input type="hidden" name="questionId" id="questionId" value="99"/>
+      <input type="hidden" name="type99" value="2"/>
+      <input type="hidden" id="blankNum99" name="blankNum99" value="1,"/>
+    `;
+    const fields = buildDraftSaveForm(html, { blanks: ["x"] });
+    assert.equal(fields.enc, "SESSION_ENC");
+    assert.equal(fields.encWork, "SESSION_ENC_WORK");
+    assert.equal(fields.courseId, "111");
+    assert.equal(fields.classId, "222");
+    assert.equal(fields.workRelationId, "333");
+    assert.equal(fields.tempSave, "true");
+    assert.equal(fields.answer991, "x");
+  });
+
   test("forces tempSave=true even when page hidden is false", () => {
     const html = `
       <form id="submitTest">
@@ -169,5 +211,34 @@ describe("parseSubmitTestFields", () => {
   test("does not invent tempSave=false", () => {
     const fields = parseSubmitTestFields(load("q3-blank.html"));
     assert.equal(fields.tempSave === "false", false);
+  });
+
+  test("keeps enc/courseId/encWork from q3-blank despite later textarea", () => {
+    const fields = parseSubmitTestFields(load("q3-blank.html"));
+    assert.equal(fields.enc, "ENC_FIXTURE");
+    assert.equal(fields.encWork, "ENC_FIXTURE");
+    assert.equal(fields.courseId, "266240948");
+    assert.equal(fields.classId, "152370813");
+    assert.equal(fields.workRelationId, "55671703");
+    assert.equal(fields.workRelationAnswerId, "55736373");
+  });
+
+  test("early hidden enc survives a later answer textarea", () => {
+    const html = `
+      <form id="submitTest">
+        <input type="hidden" name="enc" value="EARLY_ENC"/>
+        <input type="hidden" name="encWork" value="EARLY_ENC_WORK"/>
+        <input type="hidden" name="courseId" value="C1"/>
+        <input type="hidden" name="questionId" value="1"/>
+        <textarea name="answer11" id="answer11">old</textarea>
+        <input type="hidden" name="tempSave" value="true"/>
+      </form>
+    `;
+    const fields = parseSubmitTestFields(html);
+    assert.equal(fields.enc, "EARLY_ENC");
+    assert.equal(fields.encWork, "EARLY_ENC_WORK");
+    assert.equal(fields.courseId, "C1");
+    assert.equal(fields.answer11, "old");
+    assert.equal(fields.tempSave, "true");
   });
 });
