@@ -23,7 +23,7 @@ export type ParsedInboxNotice = {
   assignmentLike: boolean;
 };
 
-const CLOSED_STATUS = /待批阅|已提交|已完成|已结束|不可作答/;
+const CLOSED_STATUS = /待批阅|已提交|已完成|已批阅|已过期|已结束|不可作答|查看答案/;
 const ASSIGNMENT_LIKE = /作业|考试|测验|测试|截止|答题|试卷|练习/;
 
 export function semesterCodeOf(title: string): string | null {
@@ -83,19 +83,26 @@ export function parseCourseSpaceTodos(
   now: Date = new Date(),
 ): ParsedCourseTodo[] {
   const todos: ParsedCourseTodo[] = [];
-  const itemPattern = /<li\b([^>]*)>([\s\S]*?)<\/li>/gi;
-  for (const match of html.matchAll(itemPattern)) {
+  const openTag = /<li\b([^>]*)>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = openTag.exec(html)) !== null) {
     const attrs = parseAttributes(match[1]);
-    const inner = match[2];
     if (attrs.data === undefined && attrs.href === undefined) {
       continue;
     }
+    const startInner = match.index + match[0].length;
+    const closeIndex = findMatchingClose(html, startInner, "li");
+    const inner = html.slice(startInner, closeIndex);
+    openTag.lastIndex = closeIndex;
     const text = stripTags(inner);
     const title =
       decodeEntities(
         inner.match(/<p\b[^>]*>([^<]*)/i)?.[1]?.trim() ?? "",
       ) || course.title;
     const rawUrl = decodeEntities(attrs.data ?? attrs.href ?? "");
+    const imageMarksExpired = /<img\b[^>]*\bsrc=["'][^"']*ks_02[^"']*["']/i.test(
+      inner,
+    );
     todos.push({
       id:
         readQueryParam(rawUrl, "taskrefId") ??
@@ -103,7 +110,7 @@ export function parseCourseSpaceTodos(
         title,
       title,
       due_at: parseAbsoluteDueAt(text, now),
-      closed: CLOSED_STATUS.test(text),
+      closed: CLOSED_STATUS.test(text) || imageMarksExpired,
       remaining_text: extractRemainingText(text),
       entry_url: rawUrl.length > 0 ? rawUrl : null,
     });

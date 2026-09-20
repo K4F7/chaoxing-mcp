@@ -283,6 +283,30 @@ function fixtureAResponses(): Record<string, FakeHttpResponse> {
           courseId: currentCourse.courseId,
           classId: currentCourse.classId,
         },
+        {
+          id: "2618",
+          title: "新课已过期",
+          status: "已过期",
+          due: "2026-09-01 23:59",
+          courseId: currentCourse.courseId,
+          classId: currentCourse.classId,
+        },
+        {
+          id: "2619",
+          title: "新课已批阅",
+          status: "已批阅",
+          due: "2026-09-01 23:59",
+          courseId: currentCourse.courseId,
+          classId: currentCourse.classId,
+        },
+        {
+          id: "2620",
+          title: "新课查看答案",
+          status: "查看答案",
+          due: "2026-09-01 23:59",
+          courseId: currentCourse.courseId,
+          classId: currentCourse.classId,
+        },
       ]),
     ),
     [workListUrl(
@@ -712,7 +736,7 @@ describe("listTodos fixture semester scope", () => {
     assert.equal(fake.openLoginCallCount(), 0);
   });
 
-  test("excludes 已提交 待批阅 已完成 已结束 不可作答 and keeps 打回重做", async () => {
+  test("excludes 已提交 待批阅 已完成 已批阅 已过期 已结束 不可作答 查看答案 and keeps 打回重做", async () => {
     const fake = createPorts({
       cookie: VALID_COOKIE,
       httpByUrl: fixtureAResponses(),
@@ -724,8 +748,11 @@ describe("listTodos fixture semester scope", () => {
     assert.equal(titles.includes("新课已交"), false);
     assert.equal(titles.includes("新课待批阅"), false);
     assert.equal(titles.includes("新课已完成"), false);
+    assert.equal(titles.includes("新课已批阅"), false);
+    assert.equal(titles.includes("新课已过期"), false);
     assert.equal(titles.includes("新课已结束"), false);
     assert.equal(titles.includes("新课不可作答"), false);
+    assert.equal(titles.includes("新课查看答案"), false);
     assert.equal(titles.includes("新课打回"), true);
     const redo = result.todos.find((todo) => todo.title === "新课打回");
     assert.equal(redo?.course_title, "261-新课");
@@ -1576,7 +1603,7 @@ describe("listTodos due_at from remaining time and work detail", () => {
     assert.equal(JSON.stringify(result).includes(VALID_COOKIE), false);
   });
 
-  test("does not fetch work detail when the list already has absolute 截止时间", async () => {
+  test("keeps list absolute 截止时间 while still fetching work detail for 题干", async () => {
     const fake = createPorts({
       cookie: VALID_COOKIE,
       httpByUrl: fixtureAResponses(),
@@ -1592,7 +1619,7 @@ describe("listTodos due_at from remaining time and work detail", () => {
       fake
         .httpRequests()
         .some((req) => req.url.includes("/mooc-ans/work/phone/task-work")),
-      false,
+      true,
     );
   });
 });
@@ -1763,6 +1790,90 @@ describe("listTodos homework 题干 summary", () => {
       false,
     );
     assert.equal(JSON.stringify(result).includes(VALID_COOKIE), false);
+  });
+
+  test("list absolute 截止时间 still fetches summary and kind from doHomeWork", async () => {
+    const absoluteListHtml = `
+    <ul>
+      <li data="/mooc-ans/work/phone/task-work?taskrefId=55507098&amp;courseId=102&amp;classId=202">
+        <p>新建作业20260914172332</p>
+        <span>未交</span>
+        <span>截止时间：2026-09-22 23:25</span>
+      </li>
+    </ul>`;
+    const fake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: {
+        [AUTH_PROBE_URL]: AUTH_OK,
+        [COURSE_LIST_URL]: okHtml(
+          COURSE_LIST_URL,
+          enrolledCoursesHtml([course]),
+        ),
+        [workListUrl(course.courseId, course.classId, course.cpi)]: okHtml(
+          workListUrl(course.courseId, course.classId, course.cpi),
+          absoluteListHtml,
+        ),
+        [INBOX_URL]: okHtml(INBOX_URL, inboxHtml([])),
+        [taskWorkUrl]: okHtml(taskWorkUrl, taskWorkWithJump),
+        [doHomeWorkUrl]: okHtml(doHomeWorkUrl, doHomeWorkHtml),
+      },
+    });
+
+    const result = await listTodos("current_semester", fake.ports, now);
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.todos.length, 1);
+    assert.equal(result.todos[0]?.due_at, "2026-09-22T23:25:00+08:00");
+    assert.equal(result.todos[0]?.summary?.includes(stem), true);
+    assert.equal(result.todos[0]?.kind, "简答题");
+    assert.equal(
+      fake.httpRequests().some((req) => req.url === doHomeWorkUrl),
+      true,
+    );
+  });
+});
+
+describe("listTodos ks_02 expired image marker", () => {
+  test("excludes course-space cards whose img src contains ks_02", async () => {
+    const course = {
+      courseId: "102",
+      classId: "202",
+      cpi: "1",
+      title: "261-新课",
+    };
+    const listHtml = `
+      <ul>
+        <li data="/mooc-ans/work/phone/task-work?taskrefId=9001&amp;courseId=102&amp;classId=202">
+          <p>图标过期作业</p>
+          <img src="https://mooc1.chaoxing.com/images/ks_02.png" />
+          <span>截止时间：2026-09-20 23:59</span>
+        </li>
+        <li data="/mooc-ans/work/phone/task-work?taskrefId=9002&amp;courseId=102&amp;classId=202">
+          <p>仍开放作业</p>
+          <span>未提交</span>
+          <span>截止时间：2026-09-21 23:59</span>
+        </li>
+      </ul>`;
+    const fake = createPorts({
+      cookie: VALID_COOKIE,
+      httpByUrl: {
+        [AUTH_PROBE_URL]: AUTH_OK,
+        [COURSE_LIST_URL]: okHtml(
+          COURSE_LIST_URL,
+          enrolledCoursesHtml([course]),
+        ),
+        [workListUrl(course.courseId, course.classId, course.cpi)]: okHtml(
+          workListUrl(course.courseId, course.classId, course.cpi),
+          listHtml,
+        ),
+        [INBOX_URL]: okHtml(INBOX_URL, inboxHtml([])),
+      },
+    });
+
+    const result = await listTodos("all", fake.ports);
+    const titles = result.todos.map((todo) => todo.title);
+    assert.equal(titles.includes("图标过期作业"), false);
+    assert.equal(titles.includes("仍开放作业"), true);
   });
 });
 
