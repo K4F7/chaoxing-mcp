@@ -11,7 +11,7 @@
 - `packages/chaoxing-domain/`：可移植的 TypeScript 领域切片（同步、解析、认证、提醒规则、URL 信任分级、诊断脱敏）。
 - `packages/chaoxing-android-alarms/`：Android 预排闹钟。
 - `packages/chaoxing-android-http/`：OkHttp + CookieManager，补上 JS `fetch` 读不到 `Set-Cookie` 的缺口。
-- `packages/chaoxing-mcp/`：本机 stdio MCP（唯一工具 `list_todos`）。见 [`docs/mcp.md`](./docs/mcp.md)。
+- `packages/chaoxing-mcp/`：本机 stdio MCP（`list_todos` / `get_homework` / `save_homework_answers`）。见 [`docs/mcp.md`](./docs/mcp.md)。
 - `legacy/chaoxing_app/`：Flutter 参考实现，**不是**生产出货路径。
 - `docs/`：产品文档与架构决策记录。
 - `src/`、`scripts/`、`tests/`：早期 Cloudflare Worker 实现的遗留代码，已不参与 App 运行路径。若要跑这些脚本或测试，在仓库根使用 Node + npm（`npm ci && npm test && npm run typecheck`；脚本是 `node --import tsx`）。
@@ -29,7 +29,7 @@ args = ["start", "--silent", "--prefix", "packages/chaoxing-mcp"]
 startup_timeout_sec = 60
 ```
 
-工具只有 `list_todos`。凭据在本机钥匙串（service `chaoxinghelper.mcp` / account `cookie`）；**系统 Chrome 已登录 ≠ MCP 已登录**。登录对齐 PU 的 CLI：`cd packages/chaoxing-mcp && npm run login --silent -- -u …`（密码用 env `CHAOXING_PASSWORD` 或隐藏提示；勿写入仓库）。先 HTTP `fanyalogin`，失败再 Playwright（无 `DISPLAY` 时走 headless，有显示时有界面；验证码需人工，headless 下可能仍失败）；可能仍要验证码。HTTP 与 Playwright 都失败、无 Chrome、或无可用 cookie 时返回 `auth_expired`（不是「没有作业」）。MCP 工具不收密码。
+工具：`list_todos`、`get_homework`（读题）、`save_homework_answers`（**仅草稿** `tempSave=true`，禁止提交）。凭据在本机钥匙串（service `chaoxinghelper.mcp` / account `cookie`）；**系统 Chrome 已登录 ≠ MCP 已登录**。登录对齐 PU 的 CLI：`cd packages/chaoxing-mcp && npm run login --silent -- -u …`（密码用 env `CHAOXING_PASSWORD` 或隐藏提示；勿写入仓库）。先 HTTP `fanyalogin`，失败再 Playwright（无 `DISPLAY` 时走 headless，有显示时有界面；验证码需人工，headless 下可能仍失败）；可能仍要验证码。HTTP 与 Playwright 都失败、无 Chrome、或无可用 cookie 时返回 `auth_expired`（不是「没有作业」）。MCP 工具不收密码。
 
 ## 验证
 

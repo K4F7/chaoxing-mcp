@@ -2,7 +2,7 @@
 
 `packages/chaoxing-mcp` 是给 Grok Bot / Cursor 用的本机 stdio MCP。体验对齐 [K4F7/PU](https://github.com/K4F7/PU)：一个进程、stdio、凭据不进工具参数。
 
-工具只有 `list_todos`。Cookie 存在本机钥匙串（`@napi-rs/keyring`），不出现在工具入参或返回值里。
+工具：`list_todos`、`get_homework`、`save_homework_answers`。Cookie 存在本机钥匙串（`@napi-rs/keyring`），不出现在工具入参或返回值里。
 
 ## 与 PU 的差异
 
@@ -128,3 +128,19 @@ npm run login --silent -- -u <账号>
 - 结果里的 `courses_scanned` 随 `scope`：默认 `current_semester` 只含当前学期课（无学期码的课不进默认范围、也不进摘要）；`scope=all` 才是全部在读课（含无学期码）。摘要字段为 `id` / `title` / `semester_code`。`courses_in_scope_count` 等于 `courses_scanned.length`；`courses_enrolled_count` 是过滤前的在读课总数。不含 cookie。
 
 课表拉取会对 `courselistdata` 使用学生侧参数（`courseType=1` 的 POST/form）。不加时页面常落在「教」侧（`clazzId=0`、课名为空），从而误报 `no_semester_code`。
+
+
+## `get_homework`
+
+- 入参：`work_id`（`list_todos` 的 id / taskrefId）。
+- 读取手机端 doHomeWork 各题页，返回 `questions[]`：`index`、`question_id`、`type`、`type_label`、`title`、`stem_text`、`stem_image_urls`、`blanks`、`current_answer`、`supports_save`。
+- 题干常为图片；计算/证明等题型 `supports_save=false`（需用户自行拍照上传）。
+- 不返回 cookie、enc、密码或 token。
+
+## `save_homework_answers`
+
+- 入参：`work_id` + `answers[]`（按 `index` 和/或 `question_id`；填空用 `blanks`，单选 `choice` / 多选 `choices`）。
+- **只保存草稿**：请求永远 `tempSave=true`。禁止正式提交（`tempSave=false`）；若检测到提交意图直接拒绝。
+- 计算/证明（type 4/7）默认拒绝写入；仅当显式 `allow_rich_text=true` 才可写纯文本草稿（仍不代交、不上传照片）。
+- 不返回 cookie、enc、密码或 token。
+

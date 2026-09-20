@@ -1,0 +1,712 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<script>
+    _HOST_ = "//mooc1-api.chaoxing.com";
+    _CP_ = "/mooc-ans";
+    _HOST_CP1_ = "//mooc1-api.chaoxing.com/mooc-ans";
+    // _HOST_CP2_ = _HOST_ + _CP_;
+    _HOST_CP2_ = _CP_;
+</script><head>
+<meta content="telephone=no" name="format-detection">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="viewport" content="width=device-width, target-densitydpi=medium-dpi, initial-scale=1, user-scalable=no"/> 
+<title></title>
+<link rel="stylesheet" href="//mooc1-api.chaoxing.com/mooc-ans/css/work/phone/s/css/style-normal-rem.css?v=4.1" />
+<link rel="stylesheet" type="text/css" href="//mooc1-api.chaoxing.com/mooc-ans/css/phone/workPadPublicStyle.css?v=2026-0821-1900"/><script src="//mooc1-api.chaoxing.com/mooc-ans/js/phone/protocolChaoXing/CXJSBridge.js?v=1"></script>
+<script type="text/javascript" src="//mooc-res2.chaoxing.com/mooc-ans/js/common/jquery.min.js"></script>
+<script type="text/javascript" src="//mooc-res2.chaoxing.com/mooc-ans/js/common/jquery-migrate.min.js"></script><script src="//mooc1-api.chaoxing.com/mooc-ans/js/phone/rem750.js"></script>
+<script src="//mooc1-api.chaoxing.com/mooc-ans/js/ServerHost.js"></script>
+<script src="//mooc-res2.chaoxing.com/mooc-ans/js/phone/hintClient.js?v=2023-0707-0033"></script>
+</head>
+<style>
+.verify-mask { position: fixed; left: 0; top: 0; width: 100%; height: 100%; background: #000; opacity: 0.4; display:none; z-index:1000;}
+.verify-box { position: fixed; left: 50%; top: 30%; width: 66%; height: auto; margin-left: -33%; display:none; z-index:1001;}
+.verify-content { padding: 0.351rem 0.3276rem;  border-radius: 0.234rem 0.234rem 0 0;  background: #fff; text-align: center; color: #333; font-size: 0.2574rem;}
+.verify-btn { border-top: 1px #ccc solid; border-radius: 0 0 0.234rem 0.234rem ; overflow: hidden; }
+.verify-btn ul { display: -webkit-box;}
+.verify-blue, .verify-black { -webkit-box-flex: 1; box-flex: 1; height: 0.936rem; background: #fff; line-height: 0.936rem; text-align: center; font-size: 0.2808rem; color: #09f;}
+.verify-black { color: #333;}
+.verify-blue:not(:last-child), .verify-black:not(:last-child) { border-right: 1px #ccc solid;}
+.verify-inp{width: 2.5rem;line-height:.4rem;padding:.2rem .1rem;border:1px solid #ebebeb;border-radius:.04rem;font-size: .26rem;color: #333;box-sizing: border-box}
+.verify-img{display:inline-block;width: 1.5rem;height:.8rem;background:#ccc;margin-left:.2rem;border:1px solid #ebebeb;box-sizing: border-box}
+.verify-img img{max-width:100%;height:100%}
+.tit-verify{width:100%;font-size:.32rem;color:#333;text-align:center;margin-bottom:.32rem}
+.verify-ct{overflow:hidden;}
+</style>
+
+<article class="verify-mask"></article>
+<article class="verify-box">
+    <div class="verify-content">
+        <p class="tit-verify">输入验证码</p>
+        <div class="verify-ct">
+            <input type="text" class="verify-inp fl" id="inputCode" />
+            <span class="verify-img fl">
+				<img class="work-verify" id="workVerifyImg" src="" onclick="workVerifyCode();"/>
+			</span>
+        </div>
+    </div>
+    <div class="verify-btn">
+        <ul>
+            <li class="verify-black" onclick="hideWorkVerify();">取消</li>
+            <li class="verify-blue" onclick="verifyCode();">确定</li>
+        </ul>
+    </div>
+</article>
+
+<script>
+function showWorkVerify() {
+    workVerifyCode();
+    $(".verify-mask").css("display", "block");
+    $(".verify-box").css("display", "block");
+}
+
+function hideWorkVerify() {
+    $(".verify-mask").css("display", "none");
+    $(".verify-box").css("display", "none");
+}
+
+function submitCheckTimes() {
+    var addTimes = $("#addTimes").val() || 0;
+    var limitWorkSubmitTimes = $("#limitWorkSubmitTimes").val() || 100;
+    if (parseInt(addTimes) > parseInt(limitWorkSubmitTimes)) {
+        showWorkVerify();
+    } else {
+        if($("#phoneSubmit").val() == '1' && typeof WAY != 'undefined' && WAY.box && typeof WAY.box.show == 'function') {
+            WAY.box.show({
+                'divid': 'loadingTip'
+            });
+        }
+        setTimeout("submitForm(false)", 500);
+    }
+}
+
+function workVerifyCode() {
+    $("#workVerifyImg").attr("src", _HOST_CP2_ + "/verifyCode/stuWork?" + new Date().getTime());
+}
+
+function verifyCode() {
+
+    var courseId = $("#courseId").val() || 0;
+    var classId = $("#classId").val() || 0;
+    var cpi = $("#cpi").val() || 0;
+    var workId = $("#workId").val() || 0;
+    var answerId = $("#answerId").val() || 0;
+    var inputCode = $("#inputCode").val() || "";
+
+    $.ajax({
+        type: "get",
+        url: _HOST_CP2_ + "/work/verify/code",
+        cache: false,
+        dataType: "json",
+        async: false,
+        data: {
+            "courseId": courseId,
+            "classId": classId,
+            "cpi": cpi,
+            "workId": workId,
+            "answerId": answerId,
+            "inputCode": inputCode
+        },
+        success: function (data) {
+            if (!data.status) {
+                openWindowHintClient(2, data.msg, function(){
+                    workVerifyCode();
+                    $("#inputCode").val("");
+                }, 1000);
+            } else {
+                var enc = data.enc;
+                $("#workTimesEnc").val(enc);
+                submitForm(false);
+            }
+        }
+    });
+}
+</script><script type="text/javascript">
+	I18N_WORK = {
+		"cpResult": "测评结果",
+		"ylch": "遗漏词汇",
+		"zqdfx": "准确度分析",
+		"tasktips1": "未达到及格线，请重做",
+		"tasktips2": "未达到通过标准，请重做",
+		"backdohereV2": "很遗憾，未达到及格线，请重做"
+	};
+</script><body style="background:#fcfcfd;">
+	<input type="hidden" id="workId" value="55671703" />
+	<input type="hidden" id="answerId" value="55736373" />
+	<input type="hidden" id="cpi" value="CPI_FIXTURE" />
+	<input type="hidden" id="limitWorkSubmitTimes" value="100" />
+	<input type="hidden" id="addTimes" value="0" />
+	<input type="hidden" id="isChaoxingClient" value="false" />
+	<input type="hidden" id="taskTipsNew" value="" />
+
+	<form action="#" id="form1" method="POST">
+    	<input type="hidden" id="courseId" name="courseId" value="266240948"/>
+    	<input type="hidden" id="workRelationId" name="workRelationId" value="55671703"/>
+    	<input type="hidden" id="workRelationAnswerId" name="workRelationAnswerId" value="55736373"/>
+    	<input type="hidden" id="classId" name="classId" value="152370813"/>
+    	<input type="hidden" id="knowledgeid" name="knowledgeid" value="0"/>
+    	<input type="hidden" id="jobid" name="jobId" value=""/>
+    	<input type="hidden" id="enc" name="enc" value="ENC_FIXTURE"/>
+    	<input type="hidden" id="encWork" name="encWork" value="ENC_FIXTURE"/>
+    	<input type="hidden" id="tempSave" name="tempSave" value="false"/>
+    	<input type="hidden" id="vx" value="0" />
+		<input type="hidden" id="workTimesEnc" name="workTimesEnc" value="" />
+	</form>
+			    	    		
+    		
+    		    		<p class="timu">计算题（1道 ）</p>
+                <div class="tmAnswer clearfix">
+                                                                        <span class="wp circleItem" data="0">1</span>
+                                                            </div>
+                
+		    		
+    		
+    		    		<p class="timu">计算题（1道 ）</p>
+                <div class="tmAnswer clearfix">
+                                                                        <span class="wp circleItem" data="1">2</span>
+                                                            </div>
+                
+		    		
+    		
+    		    		<p class="timu">证明题（1道 ）</p>
+                <div class="tmAnswer clearfix">
+                                                                        <span class="wp circleItem" data="2">3</span>
+                                                            </div>
+                
+		    		
+    		
+    		    		<p class="timu">填空题（1道 ）</p>
+                <div class="tmAnswer clearfix">
+                                                                        <span class="wp circleItem" data="3">4</span>
+                                                            </div>
+                
+		    		
+    		
+    		    		<p class="timu">填空题（1道 ， 2小题 ）</p>
+                <div class="tmAnswer clearfix">
+                                                                        <span class="wp circleItem" data="4">5</span>
+                                                            </div>
+                
+		    		
+    		
+    		    		<p class="timu">填空题（1道 ）</p>
+                <div class="tmAnswer clearfix">
+                                                                        <span class="wp circleItem" data="5">6</span>
+                                                            </div>
+                
+		    		
+    		
+    		    		<p class="timu">填空题（1道 ）</p>
+                <div class="tmAnswer clearfix">
+                                                                        <span class="wp circleItem" data="6">7</span>
+                                                            </div>
+                
+		    		
+    		
+    		    		<p class="timu">计算题（1道 ， 2小题 ）</p>
+                <div class="tmAnswer clearfix">
+                                                                        <span class="wp circleItem" data="7">8</span>
+                                                            </div>
+                
+		    		
+    		
+    		    		<p class="timu">填空题（1道 ）</p>
+                <div class="tmAnswer clearfix">
+                                                                        <span class="wp circleItem" data="8">9</span>
+                                                            </div>
+                
+		    		
+    		
+    		    		<p class="timu">填空题（1道 ）</p>
+                <div class="tmAnswer clearfix">
+                                                                        <span class="wp circleItem" data="9">10</span>
+                                                            </div>
+                
+				<div class="dtkBtn">
+					<span class="fl continueDoWork" style="display:block;width:100%;">继续答题</span>
+					    </div>
+	<div class="inviCodeLayer">
+		<div class="warningArea">
+			<p>确定提交本次作业吗？</p>
+			<a class="confirmBtn">确定</a>
+		</div>
+		<a class="cancleBtn">取消</a>
+	</div>
+	<link rel="stylesheet" href="//mooc1-api.chaoxing.com/mooc-ans/css/phone/hint750.css?v=2026-0911-1521" />
+<div id="msg" class="rescan_main hint_pop">
+	<div class="msg-title">title</div>
+	<div class="msg-content">
+		<div class="msg-content-middle"></div>
+		<div class="msg-content-b">
+			<span class="msg-content-left msg-content-ok" >确定</span>
+			<span class="msg-content-right msg-content-cancel" >取消</span>
+		</div>
+	</div>
+</div>
+<div id="hint" class="rescan_main hint_pop">
+	<div class="msg-title">title</div>
+	<div class="msg-content">
+		<div class="msg-content-middle"></div>
+		<div class="msg-content-b">
+			<span class="hint-content-left msg-content-cancel">确定</span>
+		</div>
+	</div>
+</div>
+<div id="time" class="rescan_main hint_pop">
+	<div class="msg-title">title</div>
+	<div class="msg-content">
+		<div class="msg-content-middle"></div>
+	</div>
+</div>
+<div id="confirm" class="rescan_main hint_pop">
+	<div class="msg-title"></div>
+	<div class="msg-content">
+		<div class="msg-content-middle"></div>
+		<div class="msg-content-b">
+			<span class="msg-content-left msg-content-ok"></span>
+			<span class="msg-content-right msg-content-cancel"></span>
+		</div>
+	</div>
+</div>
+
+<div id="confirmNew" class="rescan_mainNew hint_pop">
+	<div class="msg-title"></div>
+	<div class="msg-contentNew">
+		<div class="msg-content-middleNew"></div>
+		<div class="msg-content-bNew">
+			<span class="msg-content-leftNew msg-content-okNew"></span>
+			<span class="msg-content-rightNew msg-content-cancelNew"></span>
+		</div>
+	</div>
+</div>
+
+<div id="confirmPop" class="rescan_main_pop hint_pop">
+	<div class="msg-title"></div>
+	<div class="msg-content">
+		<div class="msg-content-middle"></div>
+		<div class="msg-content-b">
+			<span class="msg-content-left msg-content-ok"  ></span>
+			<span class="msg-content-right msg-content-cancel"  ></span>
+		</div>
+	</div>
+</div>
+
+
+<div id="noticeConfirm" class="rescan_mainNew hint_pop">
+	<div class="notice-title"></div>
+	<div class="msg-contentNew">
+		<div class="notice-content-middle"></div>
+		<div class="msg-content-bNew">
+			<span class="msg-content-leftNew msg-content-okNew" style="width:100%;"></span>
+		</div>
+	</div>
+</div>
+
+<div id="monitorForceSubmitConfirm" class="rescan_mainNew hint_pop" style="height:3.2rem;">
+	<div class="notice-title" style="color:red;"></div>
+	<div class="msg-contentNew">
+		<div class="notice-content-middle"></div>
+		<div class="msg-content-bNew" style="color:#333;">
+			<span class="msg-content-leftNew msg-content-okNew" style="width:100%;"></span>
+		</div>
+	</div>
+</div>
+
+<div id="noticeConfirmNew" class="rescan_mainNew hint_pop" style="padding:0;height: auto">
+	<div class="notice-title" style="position: unset;padding-top:0.2rem;"></div>
+	<div class="noconPad" style="padding: 0.2rem 0.6rem">
+		<div style="color: #333;  font-size: 0.32rem; line-height: 0.5rem;" class="content-middle-new"></div>
+	</div>
+	<div class="msg-content-bNew" style=" position: unset;">
+		<span class="msg-content-leftNew msg-content-okNew" style="width:100%;"></span>
+	</div>
+</div>
+
+
+<div id="exitConfirm" class="exitMask hint_pop">
+	<div class="exitContent">
+		<p class="exitTit"></p>
+		<ul class="exitList">
+			<li class="exitAndSave"></li>
+			<li class="exitNoSve" style="color:#FF3B30"></li>
+		</ul>
+		<p class="exitCancel"></p>
+	</div>
+</div>
+
+
+<div id="loading" class="rescan_main hint_pop">
+	<div class="msg-title"></div>
+	<div class="msg-content">
+		<div class="msg-content-middle"><i class="loading-icon"></i><span></span></div>
+	</div>
+</div>
+
+
+<div id="noticePopConfirm" class="rescan_mainNew hint_pop">
+	<div class="notice-title"></div>
+	<div class="msg-contentNew">
+		<div class="notice-content-middle"></div>
+		<div class="msg-content-bNew">
+			<span class="msg-content-leftNew msg-content-okNew" style="width:100%;"></span>
+		</div>
+	</div>
+</div>
+
+<div id="confirmNewOnlyOk" class="rescan_mainNew hint_pop">
+	<div class="msg-title"></div>
+	<div class="msg-contentNew">
+		<div class="msg-content-middleNew"></div>
+		<div class="msg-content-bNew">
+			<span class="msg-content-okNew"></span>
+		</div>
+	</div>
+</div>
+
+
+<div id="mask" class="black_overlay"></div>
+<script src="//mooc-res2.chaoxing.com/mooc-ans/js/phone/hint.js?v=2026-0730-1600"></script>
+	
+<style>
+.cx_alert { position: fixed; left: 0; top: 0; width: 100%; height: 100%; background: #000; opacity: 0.4; display:none; z-index:10000;}
+.cx_alert-box { position: fixed; left: 50%; top: 30%; width: 72%; height: auto; margin-left: -36%; display:none; z-index:10001;}
+.cx_alert-content { padding: 0.351rem 0.3276rem;  border-radius: 0.234rem 0.234rem 0 0;  background: #fff; text-align: center; color: #333; font-size: 0.2574rem;}
+.cx_alert-txt { padding-top: 0.117rem; line-height: 0.48rem;font-size:0.32rem;}
+.cx_alert-btn { border-top: 0.5px solid #EBEBEB; border-radius: 0 0 0.234rem 0.234rem ; overflow: hidden; }
+.cx_alert-btn ul { display: -webkit-box; display: box; }
+.cx_alert-blue, .cx_alert-black { -webkit-box-flex: 1; box-flex: 1; height: 0.936rem; background: #fff; line-height: 0.936rem; text-align: center; font-size: 0.32rem; color: #09f;}
+.cx_alert-black { color: #0099FF;}
+.cx_alert-blue:not(:last-child),
+.cx_alert-black:not(:last-child) { border-right: 0.5px solid #EBEBEB}
+
+.cx_box { display: -webkit-box; -webkit-box-orient: vertical;  height: 100vh;}
+.cx_box-top { position: relative; width: 100%; height: 0.0023rem; z-index:100000;}
+.cx_box-content { -webkit-box-flex: 1;  -webkit-overflow-scrolling:touch; overflow:hidden; overflow-y:auto; }
+.cx_box-footer { position: relative; width: 100%;  height: 1.0764rem; z-index: 100;}
+.cx_box-bottom { height: 0.0023rem;}
+.loading{width:.4rem; height:4rem; position:fixed; left:50%; top:30%; margin-left:-.2rem; display: none; z-index:10001;}
+</style>
+
+<article class="cx_alert" id="cxAlert1" style="display: none;"></article>
+<article class="cx_alert-box" id="cxAlertBox1" style="display: none;">
+	<div class="cx_alert-content">
+		<div class="cx_alert-txt" id="cxAlertTxt1"></div>
+	</div>
+	<div class="cx_alert-btn">
+		<ul>
+			<li class="cx_alert-black" id="cancelBtn">取消</li>
+			<li class="cx_alert-blue" id="okBtn">确定</li>
+		</ul>
+	</div>
+</article>
+
+<div class="loading" id="alertLoading1"><img src="//mooc1-api.chaoxing.com/mooc-ans/images/loading.gif"/></div>
+
+<script>
+function loading() {
+	$("#cxAlert1").css("display", "block");
+	$("#alertLoading1").css("display", "block");
+}
+
+function loadingClose() {
+	$("#cxAlert1").css("display", "none");
+	$("#alertLoading1").css("display", "none");
+}
+
+function workPop(content, okTent, okcallback, cancelCallback) {
+	var ta = $("#cxAlertBox1");
+	$("#cxAlertTxt1").html(content);
+	$("#okBtn").html(okTent);
+	$("#cxAlert1").css("display", "block");
+	$("#cxAlertBox1").css("display", "block");
+	$("#okBtn").unbind();
+	$("#cancelBtn").unbind();
+	$("#cancelBtn").css("display", "block");
+	$("#okBtn").on("click", function() {
+		okcallback && okcallback(ta);
+		$("#cxAlert1").css("display", "none");
+		$("#cxAlertBox1").css("display", "none");
+	});
+	$("#cancelBtn").on("click", function() {
+		cancelCallback && cancelCallback(ta);
+		$("#cxAlert1").css("display", "none");
+		$("#cxAlertBox1").css("display", "none");
+	});
+}
+
+function workPop2(content, okTent, cancelTent, okcallback, cancelCallback) {
+	var ta = $("#cxAlertBox1");
+	$("#cxAlertTxt1").html(content);
+	$("#okBtn").html(okTent);
+	$("#cancelBtn").html(cancelTent);
+	$("#cxAlert1").css("display", "block");
+	$("#cxAlertBox1").css("display", "block");
+	$("#okBtn").unbind();
+	$("#cancelBtn").unbind();
+	$("#cancelBtn").css("display", "block");
+	$("#okBtn").on("click", function() {
+		okcallback && okcallback(ta);
+		$("#cxAlert1").css("display", "none");
+		$("#cxAlertBox1").css("display", "none");
+	});
+	$("#cancelBtn").on("click", function() {
+		cancelCallback && cancelCallback(ta);
+		$("#cxAlert1").css("display", "none");
+		$("#cxAlertBox1").css("display", "none");
+	});
+}
+
+function workAlertPop(content, okTent) {
+	$("#cxAlertTxt1").html(content);
+	$("#okBtn").html(okTent);
+	$("#cxAlert1").css("display", "block");
+	$("#cxAlertBox1").css("display", "block");
+	$("#okBtn").unbind();
+	$("#cancelBtn").unbind();
+	$("#cancelBtn").css("display", "none");
+	$("#okBtn").on("click", function() {
+		$("#cxAlert1").css("display", "none");
+		$("#cxAlertBox1").css("display", "none");
+		$("#cancelBtn").css("display", "block");
+	});
+}
+
+function workAlertPop2(content, okTent, okcallback) {
+	var ta = $("#cxAlertBox1");
+	$("#cxAlertTxt1").html(content);
+	$("#okBtn").html(okTent);
+	$("#cxAlert1").css("display", "block");
+	$("#cxAlertBox1").css("display", "block");
+	$("#okBtn").unbind();
+	$("#cancelBtn").unbind();
+	$("#cancelBtn").css("display", "none");
+	$("#okBtn").on("click", function() {
+		okcallback && okcallback(ta);
+		$("#cxAlert1").css("display", "none");
+		$("#cxAlertBox1").css("display", "none");
+	});
+}
+
+</script><script>
+	var vx = $("#vx").val();
+	var isChaoxingClient = $("#isChaoxingClient").val();
+
+	function isNewVersion(versonControl_android,versonControl_ios){
+        var versonControl ="";
+        var userAgent = navigator.userAgent;
+        var offset = userAgent.indexOf("ChaoXingStudy_");
+       var stop = 0;
+        if(userAgent.indexOf("_ios_phone") > -1){
+            stop = userAgent.indexOf("_ios_phone");
+            versonControl = versonControl_ios;
+        }else if(userAgent.indexOf("_android_phone") > -1){
+            stop = userAgent.indexOf("_android_phone");
+            versonControl = versonControl_android;
+        }
+        var versionStr = userAgent.substring(offset+14,stop);
+        versionStr = versionStr.split('_')[1];
+        if(versionStr==undefined){
+            return false;
+        }
+        versionStr = versionStr.replace(/_|\./g,"");
+        return versionStr+'' >= versonControl;
+    };
+    
+	var isNewVersion = isNewVersion("2009","2009");
+	if(isNewVersion){
+    	document.title="答题卡";
+    }else{
+    	document.title="作业报告";
+    }
+
+	var phone_protocol_tail = "#INNER";
+	$(function(){
+		$(".circleItem").bind('click',function(){
+			var index = $(this).attr("data");
+			
+			var courseId = $("#courseId").val();
+    		var classId = $("#classId").val();
+    		var workRelationId = $("#workRelationId").val();
+    		var knowledgeid = $("#knowledgeid").val();
+    		var enc = $("#enc").val();
+    		var workRelationAnswerId = $("#workRelationAnswerId").val();
+    		
+    		var sUrl = location.origin + _CP_ + "/work/phone/doHomeWork?"
+            	+ "courseId=" + courseId 
+            	+ "&classId="+ classId 
+            	+ "&source="+ 0 
+            	+ "&workId=" +workRelationId
+            	+ "&workAnswerId=" +workRelationAnswerId
+            	+ "&knowledgeid=" + knowledgeid
+            	+ "&enc=" + enc
+            	+ "&mooc=1"
+            	+ "&index=" + index;
+            
+            if (vx == 1) {
+            	sUrl = sUrl + "&vx=" + vx
+            } else {
+		    	sUrl = sUrl + "&keyboardDisplayRequiresUserAction=1" + phone_protocol_tail;
+            }
+            
+			window.location.href = sUrl;
+		});
+		
+		$(".submitWork").bind('click',function(){
+			openWindowHint(HINT_TYPE_CONFIRM,'',"确定提交吗？",function() {
+				submitCheckTimes(false);
+	    	});
+		});				
+		
+		$(".continueDoWork").bind('click',function(){
+			
+    			var workIndex = $(".wp")[0];
+    			var index = $(workIndex).attr("data");
+				
+    			var courseId = $("#courseId").val();
+        		var classId = $("#classId").val();
+        		var workRelationId = $("#workRelationId").val();
+        		var knowledgeid = $("#knowledgeid").val();
+        		var enc = $("#enc").val();
+        		var workRelationAnswerId = $("#workRelationAnswerId").val()
+        		
+        		var url = location.origin + _CP_ + "/work/phone/doHomeWork?"
+                	+ "courseId=" + courseId 
+                	+ "&classId="+ classId 
+					+ "&source="+ 0 
+                	+ "&workId=" +workRelationId
+                	+ "&workAnswerId=" +workRelationAnswerId
+                	+ "&knowledgeid=" + knowledgeid
+                	+ "&enc=" + enc
+                	+ "&mooc=1"
+                	+ "&index=" + index;
+                
+                if (vx == 1) {
+            		url = url + "&vx=" + vx
+				} else {
+					url = url + "&keyboardDisplayRequiresUserAction=1" + phone_protocol_tail;
+				}
+                
+				window.location.href = url;
+    		});
+	});
+	
+	function submitForm(tempSave,callback) {
+		var _tempSave = $("#tempSave").val();
+		if(_tempSave != tempSave){
+			$("#tempSave").val(tempSave);
+		}
+
+		var courseId = $("#courseId").val();
+		var classId = $("#classId").val();
+		var workId = $("#workRelationId").val();
+		var knowledgeId = $("#knowledgeid").val();
+		var enc = $("#enc").val();
+		var answerId = $("#workRelationAnswerId").val();
+
+		var ajax_url = _HOST_CP2_ + "/work/phone/doNormalHomeWorkSubmit?tempSave=" + tempSave;
+		var ajax_type = "post";
+		var ajax_data = $("#form1").serialize();
+		$.ajax({
+			type : ajax_type,
+			url : ajax_url,
+			data : ajax_data,
+			dataType : 'json',
+			success : function(response) {
+				if (tempSave == true) {
+					if (!response.status) {
+						if (vx == 1 || isChaoxingClient == "false") {
+							openWindowHint(HINT_TYPE_TIME, "", "提交失败", null, 1000);
+						} else {
+							openWindowHintClient(2, "提交失败", null, 1000);
+						}
+						return false;
+					}
+					var dataId = response.answerId;
+					callback && callback(dataId);
+				} else {
+					if (!response.status) {
+						if (vx == 1 || isChaoxingClient == "false") {
+							openWindowHint(HINT_TYPE_TIME, "", response.msg, null, 1000);
+						} else {
+							openWindowHintClient(2, response.msg, null, 1000);
+						}
+						return false;
+					}
+
+					if (response.stuStatus == 5) {
+						var taskTips = I18N_WORK.backdohereV2;
+						if($("#taskTipsNew").val() == '1'){
+							taskTips = I18N_WORK.tasktips2;
+						}
+						workPop(taskTips, "确定", function () {
+							var url = location.origin + _CP_ + "/work/phone/doHomeWork?" + "courseId=" + courseId + "&classId=" + classId + "&workId=" + workId
+									+ "&workAnswerId=" + answerId + "&knowledgeid=" + knowledgeId + "&enc=" + enc + "&mooc=1&source=0&index=0&checkIntegrity=true";
+							if (vx == 1 || isChaoxingClient == "false") {
+								url = url + "&vx=" + vx;
+								window.location.href = url;
+							} else {
+								url = url + "&keyboardDisplayRequiresUserAction=1" + phone_protocol_tail;
+								processOpenUrl(url, "", 0);
+							}
+						}, function () {
+							if (vx == 1 || isChaoxingClient == "false") {
+								webBack();
+								return;
+							}
+							jsBridge.postNotification("CLIENT_REFRESH_STATUS", {
+								"status": 1
+							});
+							jsBridge.postNotification('CLIENT_EXIT_LEVEL', {
+								message: ''
+							});
+						});
+					} else {
+						if (vx == 1 || isChaoxingClient == "false") {
+							openWindowHint(HINT_TYPE_TIME, "", "提交成功", function () {
+								webBack();
+							}, 1000);
+							return;
+						}
+						openWindowHintClient(2, "提交成功", function () {
+							jsBridge.postNotification("CLIENT_REFRESH_STATUS", {
+								"status": 1
+							});
+							jsBridge.postNotification('CLIENT_EXIT_LEVEL', {
+								message: ''
+							});
+						}, 1000);
+					}
+				}
+			}
+		});
+	}
+	function processOpenUrl(url,title,loadType){
+        jsBridge.postNotification('CLIENT_OPEN_URL', { "title":title, "loadType": loadType, "webUrl": url});
+    }
+
+	function backTo() {
+		var index = 0;
+		var courseId = $("#courseId").val();
+		var classId = $("#classId").val();
+		var workRelationId = $("#workRelationId").val();
+		var knowledgeid = $("#knowledgeid").val();
+		var enc = $("#enc").val();
+		var workRelationAnswerId = $("#workRelationAnswerId").val();
+		var specialUrl ="/work/phone/doHomeWork?" + "courseId=" + courseId + "&classId=" + classId + "&source=" + 0 + "&workId=" + workRelationId + "&workAnswerId=" + workRelationAnswerId +
+				"&knowledgeid=" + knowledgeid + "&enc=" + enc + "&mooc=1" + "&index=" + index;
+		if (vx == 1) {
+			specialUrl = specialUrl + "&vx=" + vx;
+		} else {
+			specialUrl = location.origin + _CP_ + specialUrl + "&keyboardDisplayRequiresUserAction=1" + phone_protocol_tail;
+		}
+		window.location.href = specialUrl;
+	}
+
+	function webBack() {
+		var url = location.origin + _CP_ + "/work/phone/task-work?taskrefId=55671703&courseId=266240948&classId=152370813&cpi=CPI_FIXTURE&vx=1";
+		window.location.href = url;
+	}
+</script>
+</body>
+</html>
