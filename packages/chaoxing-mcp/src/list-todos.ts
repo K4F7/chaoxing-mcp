@@ -407,20 +407,18 @@ export async function listTodos(
         continue;
       }
       let dueAt = task.due_at;
-      let summary: string | null = null;
-      let kind: string | null = null;
+      const extras = await extrasFromWorkPages(
+        ports.http,
+        cookie,
+        task.entry_url,
+        now,
+      );
       if (dueAt == null) {
-        const extras = await extrasFromWorkPages(
-          ports.http,
-          cookie,
-          task.entry_url,
-          now,
-        );
         dueAt =
           extras.dueAt ?? dueAtFromRemaining(task.remaining_text ?? "", now);
-        summary = extras.summary;
-        kind = extras.kind;
       }
+      const summary = extras.summary;
+      const kind = extras.kind;
       todos.push({
         id: task.id,
         title: task.title,
