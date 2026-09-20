@@ -172,38 +172,50 @@ function extractSubmitTestInner(html: string): string | null {
   return html.slice(startInner, closeIndex);
 }
 
+function applyNamedField(
+  fields: Record<string, string>,
+  attrs: string,
+  body: string | undefined,
+): void {
+  const nameMatch = attrs.match(/\bname=["']([^"']+)["']/i);
+  if (nameMatch == null) {
+    return;
+  }
+  const name = decodeEntities(nameMatch[1]);
+  if (name.length === 0) {
+    return;
+  }
+  const typeMatch = attrs.match(/\btype=["']([^"']+)["']/i);
+  const type = (typeMatch?.[1] ?? "text").toLowerCase();
+  if (type === "radio" || type === "checkbox") {
+    if (!/\bchecked\b/i.test(attrs)) {
+      return;
+    }
+  }
+  const valueAttr = attrs.match(/\bvalue=["']([^"']*)["']/i);
+  const value =
+    valueAttr != null
+      ? decodeEntities(valueAttr[1])
+      : decodeEntities(body ?? "");
+  if (name in fields && (type === "checkbox" || name.startsWith("answers"))) {
+    fields[name] = `${fields[name]},${value}`;
+  } else {
+    fields[name] = value;
+  }
+}
+
 export function parseSubmitTestFields(html: string): Record<string, string> {
   const inner = extractSubmitTestInner(html) ?? html;
   const fields: Record<string, string> = {};
-  const inputPattern =
-    /<(?:input|textarea)\b([^>]*)>(?:([\s\S]*?)<\/textarea>)?/gi;
-  for (const match of inner.matchAll(inputPattern)) {
-    const attrs = match[1];
-    const nameMatch = attrs.match(/\bname=["']([^"']+)["']/i);
-    if (nameMatch == null) {
-      continue;
-    }
-    const name = decodeEntities(nameMatch[1]);
-    if (name.length === 0) {
-      continue;
-    }
-    const typeMatch = attrs.match(/\btype=["']([^"']+)["']/i);
-    const type = (typeMatch?.[1] ?? "text").toLowerCase();
-    if (type === "radio" || type === "checkbox") {
-      if (!/\bchecked\b/i.test(attrs)) {
-        continue;
-      }
-    }
-    const valueAttr = attrs.match(/\bvalue=["']([^"']*)["']/i);
-    const value =
-      valueAttr != null
-        ? decodeEntities(valueAttr[1])
-        : decodeEntities(match[2] ?? "");
-    if (name in fields && (type === "checkbox" || name.startsWith("answers"))) {
-      fields[name] = `${fields[name]},${value}`;
-    } else {
-      fields[name] = value;
-    }
+  // Parse <input> and <textarea> separately so an early <input> never
+  // consumes bytes until a later </textarea> (greedy optional group bug).
+  for (const match of inner.matchAll(/<input\b([^>]*)\/?>/gi)) {
+    applyNamedField(fields, match[1], undefined);
+  }
+  for (const match of inner.matchAll(
+    /<textarea\b([^>]*)>([\s\S]*?)<\/textarea>/gi,
+  )) {
+    applyNamedField(fields, match[1], match[2]);
   }
   return fields;
 }
@@ -476,6 +488,34 @@ export function parseAnswerSheet(html: string): AnswerSheetEntry[] {
   return entries;
 }
 
+function mergeSessionIntoDraftForm(
+  fields: Record<string, string>,
+  html: string,
+): void {
+  const session = parseHomeworkSession(html);
+  const gaps: Array<[string, string]> = [
+    ["enc", session.enc],
+    ["encWork", session.encWork],
+    ["courseId", session.courseId],
+    ["classId", session.classId],
+    ["workRelationId", session.workRelationId],
+    ["workRelationAnswerId", session.workRelationAnswerId],
+    ["answerId", session.answerId],
+    ["cpi", session.cpi],
+    ["currentCpi", session.cpi],
+    ["knowledgeid", session.knowledgeid],
+  ];
+  for (const [key, value] of gaps) {
+    if (value.length === 0) {
+      continue;
+    }
+    const existing = fields[key];
+    if (existing == null || existing.length === 0) {
+      fields[key] = value;
+    }
+  }
+}
+
 export function buildDraftSaveForm(
   html: string,
   answer: DraftAnswerInput,
@@ -492,6 +532,9 @@ export function buildDraftSaveForm(
   if (questionId.length > 0 && fields.questionId == null) {
     fields.questionId = questionId;
   }
+
+  // Belt-and-suspenders: some live pages expose session fields by id only.
+  mergeSessionIntoDraftForm(fields, html);
 
   const parsed = parseHomeworkQuestionPage(html);
 
