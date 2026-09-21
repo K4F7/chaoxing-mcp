@@ -24,6 +24,9 @@ export const RICH_TEXT_TYPES = new Set([4, 7]);
 /** Types we can draft-save as blanks or choices without rich text. */
 export const SAVEABLE_TYPES = new Set([0, 1, 2, 3, 9, 10, 14, 15, 16, 19, 21]);
 
+/** Nested / compound blank types that persist via process_2 answer{qid} JSON. */
+const NESTED_BLANK_TYPES = new Set([15, 16, 19]);
+
 export type HomeworkBlank = {
   slot: string;
   name: string;
@@ -418,7 +421,7 @@ export function parseHomeworkQuestionPage(html: string): ParsedHomeworkQuestion 
   const title = parseTitType(html);
   const stem = parseStem(html);
   const blanks =
-    type === 15 || type === 16 || type === 19
+    NESTED_BLANK_TYPES.has(type)
       ? parseType15Blanks(html, questionId)
       : type === 2 || type === 9 || type === 10
         ? parseType2Blanks(html, questionId)
@@ -516,6 +519,87 @@ function mergeSessionIntoDraftForm(
   }
 }
 
+/** Wrap plain blank text like page editors (`<p>…</p>`); skip if already tagged. */
+function wrapBlankContent(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return value;
+  }
+  if (/<[a-zA-Z]/.test(trimmed)) {
+    return value;
+  }
+  return `<p>${value}</p>`;
+}
+
+function readInnerQuestionType(html: string, itemId: string): number {
+  const pattern =
+    /<input\b([^>]*\bclass=["'][^"']*\binnerQuestion\b[^"']*["'][^>]*)>/gi;
+  for (const match of html.matchAll(pattern)) {
+    const attrs = match[1];
+    const dataMatch = attrs.match(/\bdata=["']([^"']+)["']/i);
+    if (dataMatch?.[1] !== itemId) {
+      continue;
+    }
+    const valueMatch = attrs.match(/\bvalue=["']([^"']*)["']/i);
+    const parsed = Number.parseInt(valueMatch?.[1] ?? "2", 10);
+    return Number.isFinite(parsed) ? parsed : 2;
+  }
+  return 2;
+}
+
+/**
+ * Build hidden answer{qid} JSON matching page process_2:
+ * [{ "<itemId>": { "answer": [{"name":"1","content":"<p>…</p>"}], "type": 2 }, … }]
+ * Multiple blankLists sharing the same data=answer{qid} accumulate into one object.
+ */
+function buildType15AnswerJson(
+  html: string,
+  questionId: string,
+  blankValuesByName: Record<string, string>,
+): string | null {
+  const answerField = `answer${questionId}`;
+  const answerObj: Record<
+    string,
+    { answer: Array<{ name: string; content: string }>; type: number }
+  > = {};
+  const blankListPattern =
+    /<ul\b([^>]*\bclass=["'][^"']*\bblankList\b[^"']*["'][^>]*)>/gi;
+  for (const match of html.matchAll(blankListPattern)) {
+    const attrs = match[1];
+    const dataMatch = attrs.match(/\bdata=["']([^"']+)["']/i);
+    const itemIdMatch = attrs.match(/\bdata-itemId=["']([^"']+)["']/i);
+    if (dataMatch == null || itemIdMatch == null) {
+      continue;
+    }
+    if (dataMatch[1] !== answerField) {
+      continue;
+    }
+    const itemId = itemIdMatch[1];
+    const blankName =
+      readIdValue(html, `blankName${questionId}${itemId}`) ?? "1,";
+    const slots = blankName
+      .split(",")
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0);
+    const answerItem = slots.map((slot, index) => {
+      const fieldName = `my-content${itemId}-${slot}`;
+      const raw = blankValuesByName[fieldName] ?? "";
+      return {
+        name: String(index + 1),
+        content: wrapBlankContent(raw),
+      };
+    });
+    answerObj[itemId] = {
+      answer: answerItem,
+      type: readInnerQuestionType(html, itemId),
+    };
+  }
+  if (Object.keys(answerObj).length === 0) {
+    return null;
+  }
+  return JSON.stringify([answerObj]);
+}
+
 export function buildDraftSaveForm(
   html: string,
   answer: DraftAnswerInput,
@@ -540,6 +624,7 @@ export function buildDraftSaveForm(
 
   if (answer.blanks != null && answer.blanks.length > 0) {
     if (parsed.blanks.length > 0) {
+      const blankValuesByName: Record<string, string> = {};
       for (let i = 0; i < parsed.blanks.length; i += 1) {
         const blank = parsed.blanks[i];
         if (blank == null) {
@@ -550,6 +635,18 @@ export function buildDraftSaveForm(
           continue;
         }
         fields[blank.name] = value;
+        blankValuesByName[blank.name] = value;
+      }
+      // Nested blanks: page process_2 also writes hidden answer{qid} JSON.
+      if (NESTED_BLANK_TYPES.has(parsed.type)) {
+        const answerJson = buildType15AnswerJson(
+          html,
+          questionId,
+          blankValuesByName,
+        );
+        if (answerJson != null) {
+          fields[`answer${questionId}`] = answerJson;
+        }
       }
     } else {
       // Type 2 convention: answer{qid}{slot}
