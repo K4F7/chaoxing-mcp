@@ -185,6 +185,85 @@ describe("buildDraftSaveForm", () => {
     assert.equal(fields.tempSave, "true");
   });
 
+  test("type15 q4-blank15 writes answer{qid} process_2 JSON plus my-content", () => {
+    const fields = buildDraftSaveForm(load("q4-blank15.html"), {
+      blanks: ["0.1", "0.2"],
+    });
+    assert.equal(fields.tempSave, "true");
+    assert.equal(
+      fields["my-content52d39496-91b8-41ba-b719-f7df95649806-1"],
+      "0.1",
+    );
+    assert.equal(
+      fields["my-content10732206-d8b7-489b-b15d-c104b081883d-1"],
+      "0.2",
+    );
+    const raw = fields.answer405823589;
+    assert.ok(typeof raw === "string" && raw.length > 0);
+    const parsed = JSON.parse(raw) as Array<
+      Record<string, { answer: Array<{ name: string; content: string }>; type: number }>
+    >;
+    assert.equal(parsed.length, 1);
+    const answerObj = parsed[0]!;
+    assert.deepEqual(answerObj["52d39496-91b8-41ba-b719-f7df95649806"], {
+      answer: [{ name: "1", content: "<p>0.1</p>" }],
+      type: 2,
+    });
+    assert.deepEqual(answerObj["10732206-d8b7-489b-b15d-c104b081883d"], {
+      answer: [{ name: "1", content: "<p>0.2</p>" }],
+      type: 2,
+    });
+  });
+
+
+  test("type15 preserves page my-content for omitted blank slots in answer JSON", () => {
+    const page = load("q4-blank15.html").replace(
+      'id="my-content10732206-d8b7-489b-b15d-c104b081883d-1" style="display:none;"></textarea>',
+      'id="my-content10732206-d8b7-489b-b15d-c104b081883d-1" style="display:none;">keep-me</textarea>',
+    );
+    const fields = buildDraftSaveForm(page, {
+      blanks: ["only-first"],
+    });
+    assert.equal(
+      fields["my-content52d39496-91b8-41ba-b719-f7df95649806-1"],
+      "only-first",
+    );
+    assert.equal(
+      fields["my-content10732206-d8b7-489b-b15d-c104b081883d-1"],
+      undefined,
+    );
+    const parsed = JSON.parse(fields.answer405823589!) as Array<
+      Record<string, { answer: Array<{ name: string; content: string }>; type: number }>
+    >;
+    assert.equal(
+      parsed[0]!["52d39496-91b8-41ba-b719-f7df95649806"]!.answer[0]!.content,
+      "<p>only-first</p>",
+    );
+    assert.equal(
+      parsed[0]!["10732206-d8b7-489b-b15d-c104b081883d"]!.answer[0]!.content,
+      "<p>keep-me</p>",
+    );
+    assert.equal(fields.tempSave, "true");
+  });
+
+  test("type15 does not double-wrap blank content that already has tags", () => {
+    const fields = buildDraftSaveForm(load("q4-blank15.html"), {
+      blanks: ["<p>already</p>", "<div>x</div>"],
+    });
+    const parsed = JSON.parse(fields.answer405823589!) as Array<
+      Record<string, { answer: Array<{ name: string; content: string }>; type: number }>
+    >;
+    assert.equal(
+      parsed[0]!["52d39496-91b8-41ba-b719-f7df95649806"]!.answer[0]!.content,
+      "<p>already</p>",
+    );
+    assert.equal(
+      parsed[0]!["10732206-d8b7-489b-b15d-c104b081883d"]!.answer[0]!.content,
+      "<div>x</div>",
+    );
+    assert.equal(fields.tempSave, "true");
+  });
+
   test("applies single choice and multi choices", () => {
     const html = `
       <form id="submitTest">
