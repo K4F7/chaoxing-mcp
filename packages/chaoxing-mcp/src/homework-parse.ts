@@ -583,7 +583,8 @@ function buildType15AnswerJson(
       .filter((part) => part.length > 0);
     const answerItem = slots.map((slot, index) => {
       const fieldName = `my-content${itemId}-${slot}`;
-      const raw = blankValuesByName[fieldName] ?? "";
+      const raw =
+        blankValuesByName[fieldName] ?? readIdValue(html, fieldName) ?? "";
       return {
         name: String(index + 1),
         content: wrapBlankContent(raw),

@@ -215,6 +215,37 @@ describe("buildDraftSaveForm", () => {
     });
   });
 
+
+  test("type15 preserves page my-content for omitted blank slots in answer JSON", () => {
+    const page = load("q4-blank15.html").replace(
+      'id="my-content10732206-d8b7-489b-b15d-c104b081883d-1" style="display:none;"></textarea>',
+      'id="my-content10732206-d8b7-489b-b15d-c104b081883d-1" style="display:none;">keep-me</textarea>',
+    );
+    const fields = buildDraftSaveForm(page, {
+      blanks: ["only-first"],
+    });
+    assert.equal(
+      fields["my-content52d39496-91b8-41ba-b719-f7df95649806-1"],
+      "only-first",
+    );
+    assert.equal(
+      fields["my-content10732206-d8b7-489b-b15d-c104b081883d-1"],
+      undefined,
+    );
+    const parsed = JSON.parse(fields.answer405823589!) as Array<
+      Record<string, { answer: Array<{ name: string; content: string }>; type: number }>
+    >;
+    assert.equal(
+      parsed[0]!["52d39496-91b8-41ba-b719-f7df95649806"]!.answer[0]!.content,
+      "<p>only-first</p>",
+    );
+    assert.equal(
+      parsed[0]!["10732206-d8b7-489b-b15d-c104b081883d"]!.answer[0]!.content,
+      "<p>keep-me</p>",
+    );
+    assert.equal(fields.tempSave, "true");
+  });
+
   test("type15 does not double-wrap blank content that already has tags", () => {
     const fields = buildDraftSaveForm(load("q4-blank15.html"), {
       blanks: ["<p>already</p>", "<div>x</div>"],
