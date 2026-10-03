@@ -1,6 +1,5 @@
 .dev.vars
 .auth/
-.wrangler/
 node_modules/
 dist/
 .expo/
