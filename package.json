@@ -12,9 +12,6 @@
     "inbox:fetch": "node --import tsx scripts/inbox-fetch.ts",
     "inbox:probe": "node --import tsx scripts/probe-inbox.ts",
     "start": "node --import tsx scripts/start.ts",
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "types": "wrangler types",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "check": "npm run typecheck && npm test"
@@ -23,7 +20,6 @@
     "@types/node": "22.18.0",
     "playwright-core": "1.60.0",
     "tsx": "4.20.5",
-    "typescript": "5.9.3",
-    "wrangler": "4.95.0"
+    "typescript": "5.9.3"
   }
 }

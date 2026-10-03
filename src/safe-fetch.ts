@@ -29,7 +29,7 @@ export function isTrustedChaoxingUrl(value: string | URL): boolean {
 export async function fetchChaoxingWithCookie(
   fetcher: CookieFetcher,
   input: string | URL | Request,
-  init: RequestInit & { headers?: HeadersInit },
+  init: RequestInit,
 ): Promise<Response> {
   const cookie = new Headers(init.headers).get("Cookie");
   if (!cookie?.trim()) {
